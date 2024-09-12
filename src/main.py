@@ -6,6 +6,8 @@ from PIL import Image, ImageDraw, ImageFont
 from PIL.ExifTags import TAGS
 import qrcode
 import PIL
+import zipfile
+
 
 print(f"Versión de Python: {sys.version}")
 print(f"Versión de Pillow: {PIL.__version__}")
@@ -27,6 +29,17 @@ class FileManager:
         full_output_path = os.path.join(os.getcwd(), 'expos', output_folder)
         FileManager.ensure_directory(full_output_path)
         gdown.download_folder(url, output=full_output_path)
+
+    @staticmethod
+    def compress_output(source_dir, output_filename):
+        with zipfile.ZipFile(output_filename, 'w', zipfile.ZIP_DEFLATED) as zipf:
+            for root, _, files in os.walk(source_dir):
+                for file in files:
+                    file_path = os.path.join(root, file)
+                    arcname = os.path.relpath(file_path, source_dir)
+                    zipf.write(file_path, arcname)
+        print(f"Contenido comprimido en: {output_filename}")
+
 
 class ImageInfo:
     @staticmethod
@@ -111,7 +124,8 @@ class ExcelProcessor:
         for col in numeric_columns:
             df[col] = pd.to_numeric(df[col], errors='coerce')
 
-        output_excel_path = os.path.join(os.getcwd(), 'expos', self.output_folder, 'Resumen obras.xlsx')
+        output_excel_path = os.path.join(os.getcwd(), 'expos', self.output_folder, 'ficheros_salida', 'Resumen obras.xlsx')
+        FileManager.ensure_directory(os.path.dirname(output_excel_path))
         df.to_excel(output_excel_path, index=False)
 
         print("Procesamiento de Excel completado.")
@@ -206,9 +220,6 @@ class ImageProcessor:
         return background
 
     def process_image(self, row):
-        '''
-        Procesa la imagen, la personaliza y la guarda
-        '''
         nombre_fichero = row['FICHERO']
         nombre_artista = row['ARTISTA']
         nombre_obra = row['TÍTULO']
@@ -216,23 +227,46 @@ class ImageProcessor:
         url = row['LINK']
         pantalla = row['PANTALLA']
 
-
         img_path = os.path.join(self.expo_dir, 'Obras', nombre_fichero)
         print(f"Intentando abrir imagen: {img_path}")
         
         try:
-            img = Image.open(img_path)
-            print(f"Imagen abierta correctamente: {img_path}")
+            with Image.open(img_path) as img:
+                print(f"Imagen abierta correctamente: {img_path}")
 
-            background = self.customize_image(nombre_fichero, nombre_artista, nombre_obra, orientacion, url)
-            img_final = self.resize_and_center_image(img, background, orientacion)
+                # Guardar los metadatos originales y el modo de la imagen
+                metadata = img.info
+                original_mode = img.mode
 
-            # Renombrar el archivo antes de guardarlo
-            new_file_name = self.rename_file(pantalla, nombre_fichero)
-            output_path = os.path.join(self.output_dir, new_file_name)
-            
-            img_final.save(output_path)
-            print(f"Imagen procesada guardada como: {output_path}")
+                background = self.customize_image(nombre_fichero, nombre_artista, nombre_obra, orientacion, url)
+                img_final = self.resize_and_center_image(img, background, orientacion)
+
+                # Asegurar que la imagen final esté en el mismo modo que la original
+                img_final = img_final.convert(original_mode)
+
+                # Renombrar el archivo antes de guardarlo
+                new_file_name = self.rename_file(pantalla, nombre_fichero)
+                output_path = os.path.join(self.output_dir, new_file_name)
+                
+                # Determinar el formato de salida
+                original_format = img.format if img.format else 'JPEG'
+                
+                # Guardar la imagen preservando el formato original y los metadatos
+                if original_format == 'JPEG':
+                    img_final.save(output_path, format=original_format, quality=100, 
+                                   subsampling=0, exif=metadata.get('exif'),
+                                   icc_profile=metadata.get('icc_profile'))
+                elif original_format in ['PNG', 'TIFF']:
+                    img_final.save(output_path, format=original_format, 
+                                   compression='tiff_lzw' if original_format == 'TIFF' else 'png',
+                                   icc_profile=metadata.get('icc_profile'))
+                else:
+                    # Para otros formatos, usar PNG como fallback
+                    img_final.save(output_path, format='PNG', compression='png',
+                                   icc_profile=metadata.get('icc_profile'))
+
+                print(f"Imagen procesada guardada como: {output_path}")
+
         except Exception as e:
             print(f"Error al procesar la imagen {img_path}: {str(e)}")
 
@@ -240,7 +274,7 @@ class ImageProcessor:
         '''
         Procesa todas las imágenes
         '''
-        excel_path = os.path.join(self.expo_dir, 'Resumen obras.xlsx')
+        excel_path = os.path.join(self.expo_dir, 'ficheros_salida', 'Resumen obras.xlsx')
         if not os.path.exists(excel_path):
             print(f"Error: No se encuentra el archivo Excel en {excel_path}")
             return
@@ -299,6 +333,12 @@ def main():
     print(f"Iniciando procesamiento de imágenes en: {full_output_path}")
     image_processor.process_all_images()
     print("Procesamiento de imágenes finalizado")
+
+    # Comprimir el contenido de ficheros_salida
+    source_dir = os.path.join(full_output_path, 'ficheros_salida')
+    zip_filename = os.path.join(full_output_path, f"{expo_id}.zip")
+    FileManager.compress_output(source_dir, zip_filename)
+
 
 
 
