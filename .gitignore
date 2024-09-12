@@ -1,0 +1,6 @@
+#ignorar la carpeta expos, el entono virtual
+expos/
+env/
+expos/.DS_Store
+venv_pruebas/
+tests/
