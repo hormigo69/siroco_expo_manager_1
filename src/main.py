@@ -7,6 +7,7 @@ from PIL.ExifTags import TAGS
 import qrcode
 import PIL
 import zipfile
+import json
 
 
 print(f"Versión de Python: {sys.version}")
@@ -39,6 +40,22 @@ class FileManager:
                     arcname = os.path.relpath(file_path, source_dir)
                     zipf.write(file_path, arcname)
         print(f"Contenido comprimido en: {output_filename}")
+
+    @staticmethod
+    def save_file_list_json(expo_folder, expo_id):
+        """
+        Guarda un archivo JSON con los nombres de los ficheros y una bandera en True
+        """
+        obras_folder = os.path.join(expo_folder, 'Obras')
+        file_list = [f for f in os.listdir(obras_folder) if os.path.isfile(os.path.join(obras_folder, f))]
+        
+        json_data = {file: True for file in file_list}
+        
+        json_path = os.path.join(expo_folder, f'{expo_id}_files.json')
+        with open(json_path, 'w', encoding='utf-8') as json_file:
+            json.dump(json_data, json_file, ensure_ascii=False, indent=4)
+        
+        print(f"Archivo JSON guardado en: {json_path}")
 
 
 class ImageInfo:
@@ -296,6 +313,7 @@ class ImageProcessor:
 def main():
     drive_url_img_folder = 'https://drive.google.com/drive/folders/10oBtG589CN11SVtVfGqo7YHQwhU4K7m8'
     output_folder = 'E997'
+    expo_id = 'E997'
     
     full_output_path = os.path.join(os.getcwd(), 'expos', output_folder)
 
@@ -303,6 +321,9 @@ def main():
         FileManager.download_files(drive_url_img_folder, output_folder)
     else:
         print(f"La carpeta {full_output_path} ya existe. No se descargarán los archivos nuevamente.")
+    
+    # Guardar el archivo JSON con la lista de ficheros
+    FileManager.save_file_list_json(full_output_path, expo_id)
     
     excel_processor = ExcelProcessor(output_folder)
     excel_processor.process_excel()
@@ -327,7 +348,6 @@ def main():
         print(f"Error: El archivo de fuente no existe en la ruta: {font_path}")
         sys.exit(1)
 
-    expo_id = 'E997'  # Asegúrate de que este sea el ID correcto para la exposición
     image_processor = ImageProcessor(full_output_path, font_path, status_callback, expo_id)
     
     print(f"Iniciando procesamiento de imágenes en: {full_output_path}")
