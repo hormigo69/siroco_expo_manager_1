@@ -4,3 +4,4 @@ env/
 expos/.DS_Store
 venv_pruebas/
 tests/
+venv/
