@@ -18,6 +18,73 @@ from openpyxl.worksheet.table import Table, TableStyleInfo
 #activar el entorno virtual
 #source venv/bin/activate   
 
+# Añadir imports de Flask
+from flask import Flask, jsonify, request
+
+# Inicializar Flask
+app = Flask(__name__)
+
+# Añadir los nuevos endpoints
+@app.route('/process_expo', methods=['POST'])
+def process_expo_endpoint():
+    try:
+        data = request.json
+        expo_id = data.get('expo_id')
+        
+        if not expo_id:
+            return jsonify({'status': 'error', 'message': 'No expo_id provided'}), 400
+        
+        # Verificar si existe la carpeta ficheros_salida
+        output_path = os.path.join(os.getcwd(), 'expos', expo_id, 'ficheros_salida')
+        
+        if not os.path.exists(output_path):
+            # Si no existe pero hay un zip, procesarlo
+            processor = ExpoProcessor(expo_id)
+            
+            # Verificar si existe algún archivo zip
+            zip_files = glob.glob(os.path.join(processor.full_output_path, "*.zip"))
+            
+            if zip_files:
+                processor.setup_directories()
+                processor.unzip_files()
+                processor.process_and_move_files()
+                return jsonify({'status': 'success', 'message': 'Expo processed successfully'})
+            else:
+                return jsonify({'status': 'error', 'message': 'No zip file found'}), 404
+        
+        return jsonify({'status': 'success', 'message': 'Output folder already exists'})
+        
+    except Exception as e:
+        return jsonify({'status': 'error', 'message': str(e)}), 500
+
+@app.route('/get_images/<expo_id>')
+def get_images(expo_id):
+    try:
+        output_path = os.path.join(os.getcwd(), 'expos', expo_id, 'ficheros_salida')
+        if not os.path.exists(output_path):
+            return jsonify({'status': 'error', 'message': 'Output folder not found'}), 404
+            
+        files = []
+        for file in os.listdir(output_path):
+            if file.lower().endswith(('.mp4', '.jpg', '.jpeg', '.png')):
+                files.append({
+                    'filename': file,
+                    'is_video': file.lower().endswith('.mp4')
+                })
+        
+        return jsonify({
+            'status': 'show_images',
+            'images': files
+        })
+        
+    except Exception as e:
+        return jsonify({'status': 'error', 'message': str(e)}), 500
+
+
+
+
+
+
 class FileManager:
     @staticmethod
     #Asegura que la carpeta exista, si no, la crea
@@ -659,5 +726,6 @@ def main():
     recodificador.actualizar_excel()
 
 if __name__ == "__main__":
+    app.run(debug=True)
+    # El resto del código main() se ejecutará si se llama directamente
     main()
-

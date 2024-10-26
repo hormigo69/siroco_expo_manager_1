@@ -64,32 +64,9 @@
             display: none !important;
         }
         
-        .thumbnail-container {
-            background: rgba(0, 0, 0, 0.2);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            min-height: 200px;
-            width: 100%;
-        }
-
-        .thumbnail-container.landscape {
-            aspect-ratio: 16/9 !important;
-        }
-
-        .thumbnail-container.portrait {
-            aspect-ratio: 9/16 !important;
-        }
-
-        .thumbnail-media {
-            width: 100%;
-            height: 100%;
-            object-fit: contain;
-        }
-
         #imageGrid {
             display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
             gap: 1rem;
             align-items: start;
         }
@@ -101,6 +78,51 @@
 
         .relative[style*="span 1"] {
             grid-column: span 1 !important;
+        }
+
+        .thumbnail-container {
+            background: rgba(0, 0, 0, 0.2);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 100%;
+            height: 100%;
+        }
+
+        .thumbnail-container.landscape {
+            aspect-ratio: 16/9 !important;
+        }
+
+        .thumbnail-container.portrait {
+            aspect-ratio: 9/16 !important;
+            min-height: 500px;
+        }
+
+        .thumbnail-media {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+        }
+
+        /* Ajustamos el responsive del grid */
+        @media (max-width: 1200px) {
+            #imageGrid {
+                grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+            }
+        }
+
+        @media (max-width: 768px) {
+            #imageGrid {
+                grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            }
+            
+            .thumbnail-container {
+                min-height: 300px;
+            }
+            
+            .thumbnail-container.portrait {
+                min-height: 400px;
+            }
         }
     </style>
 </head>
@@ -149,6 +171,126 @@
     </div>
 
     <script>
+        async function processExpo(expo_id) {
+            try {
+                const response = await fetch('/process_expo', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ expo_id: expo_id })
+                });
+                
+                const data = await response.json();
+                if (data.status === 'success') {
+                    // Continuar con la carga de imágenes
+                    loadImages(expo_id);
+                } else {
+                    console.error('Error procesando la expo:', data.message);
+                }
+            } catch (error) {
+                console.error('Error:', error);
+            }
+        }
+
+        async function loadImages(expo_id) {
+            const loader = document.getElementById('loader');
+            const error = document.getElementById('error');
+            const imageGrid = document.getElementById('imageGrid');
+            
+            try {
+                loader.classList.remove('hidden');
+                error.classList.add('hidden');
+                
+                const formData = new FormData();
+                formData.append('expo_id', expo_id);
+                
+                const response = await fetch('/load_images', {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                const data = await response.json();
+                
+                imageGrid.innerHTML = ''; // Limpiar el grid antes de mostrar nuevas imágenes
+                
+                if (data.error) {
+                    error.textContent = data.error;
+                    error.classList.remove('hidden');
+                } else if (data.status === 'show_images') {
+                    // Añadir número de pantalla a cada imagen y ordenar
+                    const imagesWithScreen = data.images.map(image => {
+                        const screenMatch = image.filename.match(/P(\d{3})/);
+                        const screenNumber = screenMatch ? parseInt(screenMatch[1]) : 999;
+                        return { ...image, screenNumber };
+                    }).sort((a, b) => a.screenNumber - b.screenNumber);
+
+                    imagesWithScreen.forEach(image => {
+                        const div = document.createElement('div');
+                        div.className = 'relative bg-gray-800 p-2';
+                        
+                        const isHorizontal = image.screenNumber >= 11;
+                        
+                        if (image.is_video) {
+                            div.innerHTML = `
+                                <div class="video-container relative thumbnail-container overflow-hidden ${isHorizontal ? 'landscape' : 'portrait'}">
+                                    <div class="absolute top-2 left-2 bg-black bg-opacity-50 px-2 py-1 text-white text-sm z-10">
+                                        ${image.screenNumber}
+                                    </div>
+                                    <video 
+                                        class="thumbnail-media" 
+                                        preload="metadata">
+                                        <source src="/expos/${expo_id}/ficheros_salida/${image.filename}" type="video/mp4">
+                                    </video>
+                                    <div class="video-controls absolute bottom-0 left-0 right-0 p-2 flex flex-col gap-1">
+                                        <div class="progress rounded-full">
+                                            <div class="progress-filled rounded-full"></div>
+                                        </div>
+                                        <div class="flex items-center justify-between">
+                                            <button class="play-pause-btn text-white p-1 rounded hover:bg-black hover:bg-opacity-30">
+                                                <svg class="w-5 h-5 play-icon" fill="currentColor" viewBox="0 0 20 20">
+                                                    <path d="M10 0a10 10 0 100 20 10 10 0 000-20zm4 10.5l-6 3.5V7l6 3.5z"/>
+                                                </svg>
+                                                <svg class="w-5 h-5 pause-icon hidden" fill="currentColor" viewBox="0 0 20 20">
+                                                    <path d="M5 4h3v12H5V4zm7 0h3v12h-3V4z"/>
+                                                </svg>
+                                            </button>
+                                            <span class="time-display text-white text-xs">0:00 / 0:00</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            `;
+                            
+                            // Añadir los event listeners para el video...
+                        } else {
+                            div.innerHTML = `
+                                <div class="thumbnail-container ${isHorizontal ? 'landscape' : 'portrait'}">
+                                    <div class="absolute top-2 left-2 bg-black bg-opacity-50 px-2 py-1 text-white text-sm z-10">
+                                        ${image.screenNumber}
+                                    </div>
+                                    <img 
+                                        src="${image.thumbnail}" 
+                                        class="thumbnail-media" 
+                                        alt="${image.filename}">
+                                </div>
+                            `;
+                        }
+                        
+                        // Solo asignar el gridColumn
+                        div.style.gridColumn = isHorizontal ? 'span 2' : 'span 1';
+                        
+                        imageGrid.appendChild(div);
+                    });
+                }
+            } catch (err) {
+                console.error('Error en loadImages:', err);
+                error.textContent = 'Error al cargar las imágenes';
+                error.classList.remove('hidden');
+            } finally {
+                loader.classList.add('hidden');
+            }
+        }
+
         document.getElementById('expoForm').addEventListener('submit', async (e) => {
             e.preventDefault();
             const expo_id = document.getElementById('expo_id').value;
@@ -282,9 +424,8 @@
                             `;
                         }
                         
-                        // Forzar el estilo del grid-item basado en el número de pantalla
+                        // Solo asignar el gridColumn
                         div.style.gridColumn = isHorizontal ? 'span 2' : 'span 1';
-                        div.style.aspectRatio = isHorizontal ? '16/9' : '9/16';
                         
                         imageGrid.appendChild(div);
                     });
@@ -292,7 +433,7 @@
                     document.getElementById('processDialog').classList.remove('hidden');
                 } else if (data.status === 'ask_unzip') {
                     const div = document.createElement('div');
-                    div.className = 'bg-gray-800 p-6 rounded-lg text-center';
+                    div.className = 'bg-gray-800 p-6 rounded-lg text-center max-w-md mx-auto mt-8'; // Añadido max-w-md mx-auto mt-8
                     div.innerHTML = `
                         <p class="mb-4">Se encontraron los siguientes archivos ZIP:</p>
                         <ul class="mb-4 text-gray-300">
@@ -333,10 +474,39 @@
             document.getElementById('imageGrid').innerHTML = '';
         }
 
-        function unzipFiles() {
-            // Aquí implementaremos la lgica para descomprimir los archivos
-            // Por ahora solo limpiamos la pantalla
-            document.getElementById('imageGrid').innerHTML = '';
+        async function unzipFiles() {
+            const expo_id = document.getElementById('expo_id').value;
+            const loader = document.getElementById('loader');
+            const error = document.getElementById('error');
+            
+            try {
+                loader.classList.remove('hidden');
+                error.classList.add('hidden');
+                
+                // Llamar al endpoint process_expo
+                const response = await fetch('/process_expo', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ expo_id: expo_id })
+                });
+                
+                const data = await response.json();
+                
+                if (data.status === 'success') {
+                    // Recargar las imágenes después de procesar
+                    loadImages(expo_id);
+                } else {
+                    error.textContent = data.message;
+                    error.classList.remove('hidden');
+                }
+            } catch (err) {
+                error.textContent = 'Error al procesar los archivos';
+                error.classList.remove('hidden');
+            } finally {
+                loader.classList.add('hidden');
+            }
         }
     </script>
 </body>

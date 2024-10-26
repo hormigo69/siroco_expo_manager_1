@@ -3,6 +3,8 @@ import os
 from PIL import Image
 import io
 import base64
+import glob
+from main import ExpoProcessor  # Importar la clase desde main.py
 
 app = Flask(__name__)
 
@@ -72,6 +74,38 @@ def load_images():
 def serve_file(expo_id, filename):
     directory = os.path.join(os.getcwd(), 'expos', expo_id, 'ficheros_salida')
     return send_from_directory(directory, filename)
+
+@app.route('/process_expo', methods=['POST'])
+def process_expo_endpoint():
+    try:
+        data = request.json
+        expo_id = data.get('expo_id')
+        
+        if not expo_id:
+            return jsonify({'status': 'error', 'message': 'No expo_id provided'}), 400
+        
+        # Verificar si existe la carpeta ficheros_salida
+        output_path = os.path.join(os.getcwd(), 'expos', expo_id, 'ficheros_salida')
+        
+        if not os.path.exists(output_path):
+            # Si no existe pero hay un zip, procesarlo
+            processor = ExpoProcessor(expo_id)
+            
+            # Verificar si existe algún archivo zip
+            zip_files = glob.glob(os.path.join(processor.full_output_path, "*.zip"))
+            
+            if zip_files:
+                processor.setup_directories()
+                processor.unzip_files()
+                processor.process_and_move_files()
+                return jsonify({'status': 'success', 'message': 'Expo processed successfully'})
+            else:
+                return jsonify({'status': 'error', 'message': 'No zip file found'}), 404
+        
+        return jsonify({'status': 'success', 'message': 'Output folder already exists'})
+        
+    except Exception as e:
+        return jsonify({'status': 'error', 'message': str(e)}), 500
 
 if __name__ == '__main__':
     app.run(debug=True)
