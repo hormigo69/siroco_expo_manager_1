@@ -124,6 +124,36 @@
                 min-height: 400px;
             }
         }
+
+        .info-icon {
+            position: absolute;
+            top: 2px;
+            right: 2px;
+            background: rgba(0, 0, 0, 0.5);
+            border-radius: 50%;
+            padding: 4px;
+            cursor: pointer;
+            z-index: 10;
+            transition: background-color 0.2s;
+        }
+
+        .info-icon:hover {
+            background: rgba(0, 0, 0, 0.8);
+        }
+
+        .info-modal {
+            display: none;
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(17, 24, 39, 0.95);
+            padding: 1.5rem;
+            border-radius: 0.5rem;
+            z-index: 50;
+            max-width: 90%;
+            width: 400px;
+        }
     </style>
 </head>
 <body class="bg-gray-900 text-gray-100 min-h-screen">
@@ -167,6 +197,16 @@
                     </button>
                 </div>
             </div>
+        </div>
+
+        <!-- Añadir el modal de información justo antes del cierre del div.container -->
+        <div id="infoModal" class="info-modal">
+            <h3 class="text-xl font-bold mb-4">Información del archivo</h3>
+            <div id="infoContent" class="space-y-2"></div>
+            <button onclick="closeInfoModal()" 
+                    class="mt-4 px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-md w-full">
+                Cerrar
+            </button>
         </div>
     </div>
 
@@ -237,6 +277,11 @@
                                     <div class="absolute top-2 left-2 bg-black bg-opacity-50 px-2 py-1 text-white text-sm z-10">
                                         ${image.screenNumber}
                                     </div>
+                                    <div class="info-icon" onclick="showInfo('${image.filename}', ${JSON.stringify(image).replace(/"/g, '&quot;')})">
+                                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                                        </svg>
+                                    </div>
                                     <video 
                                         class="thumbnail-media" 
                                         preload="metadata">
@@ -267,6 +312,11 @@
                                 <div class="thumbnail-container ${isHorizontal ? 'landscape' : 'portrait'}">
                                     <div class="absolute top-2 left-2 bg-black bg-opacity-50 px-2 py-1 text-white text-sm z-10">
                                         ${image.screenNumber}
+                                    </div>
+                                    <div class="info-icon" onclick="showInfo('${image.filename}', ${JSON.stringify(image).replace(/"/g, '&quot;')})">
+                                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                                        </svg>
                                     </div>
                                     <img 
                                         src="${image.thumbnail}" 
@@ -336,6 +386,11 @@
                                 <div class="video-container relative thumbnail-container overflow-hidden ${isHorizontal ? 'landscape' : 'portrait'}">
                                     <div class="absolute top-2 left-2 bg-black bg-opacity-50 px-2 py-1 text-white text-sm z-10">
                                         ${image.screenNumber}
+                                    </div>
+                                    <div class="info-icon" onclick="showInfo('${image.filename}', ${JSON.stringify(image).replace(/"/g, '&quot;')})">
+                                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                                        </svg>
                                     </div>
                                     <video 
                                         class="thumbnail-media" 
@@ -415,6 +470,11 @@
                                 <div class="thumbnail-container ${isHorizontal ? 'landscape' : 'portrait'}">
                                     <div class="absolute top-2 left-2 bg-black bg-opacity-50 px-2 py-1 text-white text-sm z-10">
                                         ${image.screenNumber}
+                                    </div>
+                                    <div class="info-icon" onclick="showInfo('${image.filename}', ${JSON.stringify(image).replace(/"/g, '&quot;')})">
+                                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                                        </svg>
                                     </div>
                                     <img 
                                         src="${image.thumbnail}" 
@@ -506,6 +566,34 @@
                 error.classList.remove('hidden');
             } finally {
                 loader.classList.add('hidden');
+            }
+        }
+
+        // Añadir estas nuevas funciones al final del script
+        function showInfo(filename, imageData) {
+            const modal = document.getElementById('infoModal');
+            const content = document.getElementById('infoContent');
+            
+            content.innerHTML = `
+                <p><strong>Nombre:</strong> ${filename}</p>
+                <p><strong>Pantalla:</strong> ${imageData.screenNumber}</p>
+                <p><strong>Tipo:</strong> ${imageData.is_video ? 'Video' : 'Imagen'}</p>
+                ${imageData.dimensions ? `<p><strong>Dimensiones:</strong> ${imageData.dimensions}</p>` : ''}
+                ${imageData.duration ? `<p><strong>Duración:</strong> ${imageData.duration}</p>` : ''}
+            `;
+            
+            modal.style.display = 'block';
+        }
+
+        function closeInfoModal() {
+            document.getElementById('infoModal').style.display = 'none';
+        }
+
+        // Cerrar modal al hacer clic fuera de él
+        window.onclick = function(event) {
+            const modal = document.getElementById('infoModal');
+            if (event.target === modal) {
+                closeInfoModal();
             }
         }
     </script>
