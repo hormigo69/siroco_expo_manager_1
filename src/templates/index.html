@@ -134,7 +134,11 @@
             padding: 4px;
             cursor: pointer;
             z-index: 10;
-            transition: background-color 0.2s;
+            transition: all 0.2s;
+        }
+
+        .info-icon svg {
+            transition: stroke 0.2s;
         }
 
         .info-icon:hover {
@@ -211,6 +215,35 @@
     </div>
 
     <script>
+        // Constantes de validación para imágenes
+        const IMG_MAX_FILE_SIZE_MB = 100;
+        const IMG_ALLOWED_FORMATS = ['image/png', 'image/jpeg', 'image/jpg', 'image/JPEG', 'image/JPG'];
+        const IMG_VERTICAL_DIMENSIONS = {
+            width: 2160,
+            height: 3840
+        };
+        const IMG_HORIZONTAL_DIMENSIONS = {
+            width: 3840,
+            height: 2160
+        };
+        const IMG_REQUIRED_DPI = 72;
+
+        // Constantes de validación para vídeos
+        const VIDEO_MAX_FILE_SIZE_MB = 100;
+        const VIDEO_ALLOWED_FORMAT = 'video/mp4';
+        const VIDEO_VERTICAL_DIMENSIONS = {
+            width: 2160,
+            height: 3840
+        };
+        const VIDEO_HORIZONTAL_DIMENSIONS = {
+            width: 3840,
+            height: 2160
+        };
+        const VIDEO_MAX_FPS = 30;
+        const VIDEO_MIN_BITRATE = 30; // Mbps
+        const VIDEO_MAX_BITRATE = 60; // Mbps
+        const VIDEO_ALLOWED_CODECS = ['H.265', 'H.264'];
+
         async function processExpo(expo_id) {
             try {
                 const response = await fetch('/process_expo', {
@@ -277,9 +310,12 @@
                                     <div class="absolute top-2 left-2 bg-black bg-opacity-50 px-2 py-1 text-white text-sm z-10">
                                         ${image.screenNumber}
                                     </div>
-                                    <div class="info-icon" onclick="showInfo('${image.filename}', ${JSON.stringify(image).replace(/"/g, '&quot;')})">
+                                    <div class="info-icon" 
+                                         data-filename="${image.filename}" 
+                                         onclick="showInfo('${image.filename}', ${JSON.stringify(image).replace(/"/g, '&quot;')})">
                                         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" 
+                                                  d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
                                         </svg>
                                     </div>
                                     <video 
@@ -313,9 +349,12 @@
                                     <div class="absolute top-2 left-2 bg-black bg-opacity-50 px-2 py-1 text-white text-sm z-10">
                                         ${image.screenNumber}
                                     </div>
-                                    <div class="info-icon" onclick="showInfo('${image.filename}', ${JSON.stringify(image).replace(/"/g, '&quot;')})">
+                                    <div class="info-icon" 
+                                         data-filename="${image.filename}" 
+                                         onclick="showInfo('${image.filename}', ${JSON.stringify(image).replace(/"/g, '&quot;')})">
                                         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" 
+                                                  d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
                                         </svg>
                                     </div>
                                     <img 
@@ -387,9 +426,12 @@
                                     <div class="absolute top-2 left-2 bg-black bg-opacity-50 px-2 py-1 text-white text-sm z-10">
                                         ${image.screenNumber}
                                     </div>
-                                    <div class="info-icon" onclick="showInfo('${image.filename}', ${JSON.stringify(image).replace(/"/g, '&quot;')})">
+                                    <div class="info-icon" 
+                                         data-filename="${image.filename}" 
+                                         onclick="showInfo('${image.filename}', ${JSON.stringify(image).replace(/"/g, '&quot;')})">
                                         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" 
+                                                  d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
                                         </svg>
                                     </div>
                                     <video 
@@ -471,9 +513,12 @@
                                     <div class="absolute top-2 left-2 bg-black bg-opacity-50 px-2 py-1 text-white text-sm z-10">
                                         ${image.screenNumber}
                                     </div>
-                                    <div class="info-icon" onclick="showInfo('${image.filename}', ${JSON.stringify(image).replace(/"/g, '&quot;')})">
+                                    <div class="info-icon" 
+                                         data-filename="${image.filename}" 
+                                         onclick="showInfo('${image.filename}', ${JSON.stringify(image).replace(/"/g, '&quot;')})">
                                         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" 
+                                                  d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
                                         </svg>
                                     </div>
                                     <img 
@@ -573,6 +618,9 @@
         function showInfo(filename, imageData) {
             const modal = document.getElementById('infoModal');
             const content = document.getElementById('infoContent');
+            const infoIcon = document.querySelector(`[data-filename="${filename}"] .info-icon`);
+            
+            let hasErrors = false;
             
             let infoHtml = `
                 <p><strong>Nombre:</strong> ${filename}</p>
@@ -581,29 +629,70 @@
 
             if (imageData.info) {
                 const info = imageData.info;
-                infoHtml += `
-                    <p><strong>Dimensiones:</strong> ${info.ANCHO}x${info.ALTO}</p>
-                    <p><strong>Orientación:</strong> ${info.ORIENTACION}</p>
-                    <p><strong>Formato:</strong> ${info.FORMATO}</p>
-                    <p><strong>Tamaño:</strong> ${info.TAMAÑO_MB} MB</p>
-                `;
+                
+                // Formatear el tamaño del archivo
+                let tamaño = parseFloat(info.TAMAÑO_MB);
+                let unidad = 'MB';
+                if (tamaño >= 1024) {
+                    tamaño = (tamaño / 1024).toFixed(2);
+                    unidad = 'GB';
+                } else {
+                    tamaño = tamaño.toFixed(2);
+                }
 
-                if (imageData.is_video) {
+                // Verificar tamaño máximo
+                const tamañoExcedido = parseFloat(info.TAMAÑO_MB) > IMG_MAX_FILE_SIZE_MB;
+                const tamañoClass = tamañoExcedido ? 'text-red-500' : '';
+                hasErrors = hasErrors || tamañoExcedido;
+
+                if (!imageData.is_video) {
+                    // Verificar formato
+                    const formatoValido = IMG_ALLOWED_FORMATS.includes(imageData.info.FORMATO);
+                    const formatoClass = formatoValido ? '' : 'text-red-500';
+                    hasErrors = hasErrors || !formatoValido;
+
+                    // Verificar resolución
+                    const esVertical = info.ALTO > info.ANCHO;
+                    const resolucionCorrecta = (esVertical && info.ANCHO === IMG_VERTICAL_DIMENSIONS.width && info.ALTO === IMG_VERTICAL_DIMENSIONS.height) ||
+                                             (!esVertical && info.ANCHO === IMG_HORIZONTAL_DIMENSIONS.width && info.ALTO === IMG_HORIZONTAL_DIMENSIONS.height);
+                    const resolucionClass = resolucionCorrecta ? '' : 'text-red-500';
+                    hasErrors = hasErrors || !resolucionCorrecta;
+
+                    // Verificar DPI
+                    const dpiCorrecto = Math.round(info.RESOLUCION_X) === IMG_REQUIRED_DPI && Math.round(info.RESOLUCION_Y) === IMG_REQUIRED_DPI;
+                    const dpiClass = dpiCorrecto ? '' : 'text-red-500';
+                    hasErrors = hasErrors || !dpiCorrecto;
+
                     infoHtml += `
+                        <p><strong>Dimensiones:</strong> <span class="${resolucionClass}">${info.ANCHO}x${info.ALTO}</span></p>
+                        <p><strong>Formato:</strong> <span class="${formatoClass}">${info.FORMATO}</span></p>
+                        <p><strong>Tamaño:</strong> <span class="${tamañoClass}">${tamaño} ${unidad}</span></p>
+                        <p><strong>Resolución:</strong> <span class="${dpiClass}">${Math.round(info.RESOLUCION_X)}x${Math.round(info.RESOLUCION_Y)} DPI</span></p>
+                    `;
+                } else {
+                    infoHtml += `
+                        <p><strong>Dimensiones:</strong> ${info.ANCHO}x${info.ALTO}</p>
+                        <p><strong>Formato:</strong> ${info.FORMATO}</p>
+                        <p><strong>Tamaño:</strong> <span class="${tamañoClass}">${tamaño} ${unidad}</span></p>
                         <p><strong>Duración:</strong> ${info.DURACION_SEG} segundos</p>
                         <p><strong>FPS:</strong> ${info.FPS}</p>
                         <p><strong>Códec:</strong> ${info.CÓDEC_VIDEO}</p>
                         <p><strong>Tasa de bits:</strong> ${Math.round(info.TASA_BITS / 1000000)} Mbps</p>
-                    `;
-                } else if (info.RESOLUCION_X && info.RESOLUCION_Y) {
-                    infoHtml += `
-                        <p><strong>Resolución:</strong> ${Math.round(info.RESOLUCION_X)}x${Math.round(info.RESOLUCION_Y)} DPI</p>
                     `;
                 }
             }
             
             content.innerHTML = infoHtml;
             modal.style.display = 'block';
+
+            // Actualizar el color del icono de info
+            if (hasErrors) {
+                infoIcon.classList.add('text-red-500');
+                infoIcon.querySelector('svg').setAttribute('stroke', 'rgb(239, 68, 68)'); // color rojo de Tailwind
+            } else {
+                infoIcon.classList.remove('text-red-500');
+                infoIcon.querySelector('svg').setAttribute('stroke', 'currentColor');
+            }
         }
 
         function closeInfoModal() {
