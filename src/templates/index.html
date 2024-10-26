@@ -63,6 +63,45 @@
         video::-webkit-media-controls {
             display: none !important;
         }
+        
+        .thumbnail-container {
+            background: rgba(0, 0, 0, 0.2);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 200px;
+            width: 100%;
+        }
+
+        .thumbnail-container.landscape {
+            aspect-ratio: 16/9 !important;
+        }
+
+        .thumbnail-container.portrait {
+            aspect-ratio: 9/16 !important;
+        }
+
+        .thumbnail-media {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+        }
+
+        #imageGrid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            gap: 1rem;
+            align-items: start;
+        }
+
+        /* Forzar los tamaños */
+        .relative[style*="span 2"] {
+            grid-column: span 2 !important;
+        }
+
+        .relative[style*="span 1"] {
+            grid-column: span 1 !important;
+        }
     </style>
 </head>
 <body class="bg-gray-900 text-gray-100 min-h-screen">
@@ -136,15 +175,28 @@
                     error.textContent = data.error;
                     error.classList.remove('hidden');
                 } else if (data.status === 'show_images') {
-                    data.images.forEach(image => {
+                    // Añadir número de pantalla a cada imagen y ordenar
+                    const imagesWithScreen = data.images.map(image => {
+                        const screenMatch = image.filename.match(/P(\d{3})/);
+                        const screenNumber = screenMatch ? parseInt(screenMatch[1]) : 999; // Si no hay coincidencia, va al final
+                        return { ...image, screenNumber };
+                    }).sort((a, b) => a.screenNumber - b.screenNumber);
+
+                    imagesWithScreen.forEach(image => {
                         const div = document.createElement('div');
-                        div.className = 'relative bg-gray-800 p-2 rounded-lg';
+                        div.className = 'relative bg-gray-800 p-2';
+                        
+                        // Determinar si es horizontal basado en el número de pantalla
+                        const isHorizontal = image.screenNumber >= 11;
                         
                         if (image.is_video) {
                             div.innerHTML = `
-                                <div class="video-container relative">
+                                <div class="video-container relative thumbnail-container overflow-hidden ${isHorizontal ? 'landscape' : 'portrait'}">
+                                    <div class="absolute top-2 left-2 bg-black bg-opacity-50 px-2 py-1 text-white text-sm z-10">
+                                        ${image.screenNumber}
+                                    </div>
                                     <video 
-                                        class="w-full h-40 object-cover rounded-md" 
+                                        class="thumbnail-media" 
                                         preload="metadata">
                                         <source src="/expos/${expo_id}/ficheros_salida/${image.filename}" type="video/mp4">
                                     </video>
@@ -166,20 +218,8 @@
                                     </div>
                                 </div>
                             `;
-                        } else {
-                            div.innerHTML = `
-                                <img src="${image.thumbnail}" class="w-full h-40 object-cover rounded-md" alt="${image.filename}">
-                            `;
-                        }
-                        
-                        div.innerHTML += `
-                            <p class="mt-2 text-sm text-gray-300 truncate">${image.filename}</p>
-                        `;
-                        
-                        imageGrid.appendChild(div);
-                        
-                        // Configurar controles de video si es un video
-                        if (image.is_video) {
+
+                            // Añadir los event listeners después de crear el elemento
                             const container = div.querySelector('.video-container');
                             const video = container.querySelector('video');
                             const playPauseBtn = container.querySelector('.play-pause-btn');
@@ -189,8 +229,6 @@
                             const playIcon = playPauseBtn.querySelector('.play-icon');
                             const pauseIcon = playPauseBtn.querySelector('.pause-icon');
 
-                            let isDragging = false;
-
                             // Función para formatear tiempo
                             const formatTime = seconds => {
                                 const mins = Math.floor(seconds / 60);
@@ -198,20 +236,7 @@
                                 return `${mins}:${secs < 10 ? '0' : ''}${secs}`;
                             };
 
-                            // Función para actualizar el tiempo basado en la posición del mouse
-                            const scrub = (e) => {
-                                const progressRect = progress.getBoundingClientRect();
-                                const percent = Math.min(Math.max(0, e.clientX - progressRect.left), progressRect.width) / progressRect.width;
-                                const scrubTime = percent * video.duration;
-                                if (isDragging) {
-                                    e.preventDefault();
-                                    progressFilled.style.width = `${percent * 100}%`;
-                                    timeDisplay.textContent = `${formatTime(scrubTime)} / ${formatTime(video.duration)}`;
-                                    video.currentTime = scrubTime;
-                                }
-                            };
-
-                            // Manejar click en play/pause
+                            // Play/Pause
                             playPauseBtn.addEventListener('click', () => {
                                 if (video.paused) {
                                     video.play();
@@ -224,44 +249,17 @@
                                 }
                             });
 
-                            // Eventos para el arrastre de la línea de tiempo
-                            progress.addEventListener('mousedown', (e) => {
-                                isDragging = true;
-                                scrub(e);
-                            });
-
-                            document.addEventListener('mousemove', (e) => {
-                                if (isDragging) scrub(e);
-                            });
-
-                            document.addEventListener('mouseup', () => {
-                                isDragging = false;
-                            });
-
-                            // Mostrar preview al hover sobre la línea de tiempo
-                            progress.addEventListener('mousemove', (e) => {
-                                if (!isDragging) {
-                                    const progressRect = progress.getBoundingClientRect();
-                                    const percent = Math.min(Math.max(0, e.clientX - progressRect.left), progressRect.width) / progressRect.width;
-                                    const previewTime = percent * video.duration;
-                                    timeDisplay.textContent = `${formatTime(previewTime)} / ${formatTime(video.duration)}`;
-                                }
-                            });
-
-                            // Restaurar display de tiempo actual al salir de la línea de tiempo
-                            progress.addEventListener('mouseleave', () => {
-                                if (!isDragging) {
-                                    timeDisplay.textContent = `${formatTime(video.currentTime)} / ${formatTime(video.duration)}`;
-                                }
-                            });
-
-                            // Actualizar barra de progreso durante la reproducción
+                            // Actualizar barra de progreso
                             video.addEventListener('timeupdate', () => {
-                                if (!isDragging) {
-                                    const percent = (video.currentTime / video.duration) * 100;
-                                    progressFilled.style.width = `${percent}%`;
-                                    timeDisplay.textContent = `${formatTime(video.currentTime)} / ${formatTime(video.duration)}`;
-                                }
+                                const percent = (video.currentTime / video.duration) * 100;
+                                progressFilled.style.width = `${percent}%`;
+                                timeDisplay.textContent = `${formatTime(video.currentTime)} / ${formatTime(video.duration)}`;
+                            });
+
+                            // Click en la barra de progreso
+                            progress.addEventListener('click', (e) => {
+                                const progressTime = (e.offsetX / progress.offsetWidth) * video.duration;
+                                video.currentTime = progressTime;
                             });
 
                             // Resetear al terminar
@@ -270,7 +268,25 @@
                                 playIcon.classList.remove('hidden');
                                 pauseIcon.classList.add('hidden');
                             });
+                        } else {
+                            div.innerHTML = `
+                                <div class="thumbnail-container ${isHorizontal ? 'landscape' : 'portrait'}">
+                                    <div class="absolute top-2 left-2 bg-black bg-opacity-50 px-2 py-1 text-white text-sm z-10">
+                                        ${image.screenNumber}
+                                    </div>
+                                    <img 
+                                        src="${image.thumbnail}" 
+                                        class="thumbnail-media" 
+                                        alt="${image.filename}">
+                                </div>
+                            `;
                         }
+                        
+                        // Forzar el estilo del grid-item basado en el número de pantalla
+                        div.style.gridColumn = isHorizontal ? 'span 2' : 'span 1';
+                        div.style.aspectRatio = isHorizontal ? '16/9' : '9/16';
+                        
+                        imageGrid.appendChild(div);
                     });
                     
                     document.getElementById('processDialog').classList.remove('hidden');
@@ -318,7 +334,7 @@
         }
 
         function unzipFiles() {
-            // Aquí implementaremos la lógica para descomprimir los archivos
+            // Aquí implementaremos la lgica para descomprimir los archivos
             // Por ahora solo limpiamos la pantalla
             document.getElementById('imageGrid').innerHTML = '';
         }
