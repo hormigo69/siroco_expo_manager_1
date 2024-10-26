@@ -216,7 +216,7 @@
 
     <script>
         // Constantes de validación para imágenes
-        const IMG_MAX_FILE_SIZE_MB = 100;
+        const IMG_MAX_FILE_SIZE_MB = 300;  // Cambiado a 300MB
         const IMG_ALLOWED_FORMATS = ['image/png', 'image/jpeg', 'image/jpg', 'image/JPEG', 'image/JPG'];
         const IMG_VERTICAL_DIMENSIONS = {
             width: 2160,
@@ -229,7 +229,7 @@
         const IMG_REQUIRED_DPI = 72;
 
         // Constantes de validación para vídeos
-        const VIDEO_MAX_FILE_SIZE_MB = 100;
+        const VIDEO_MAX_FILE_SIZE_MB = 500;  // Cambiado a 500MB
         const VIDEO_ALLOWED_FORMAT = 'video/mp4';
         const VIDEO_VERTICAL_DIMENSIONS = {
             width: 2160,
@@ -640,27 +640,36 @@
                     tamaño = tamaño.toFixed(2);
                 }
 
-                // Verificar tamaño máximo
-                const tamañoExcedido = parseFloat(info.TAMAÑO_MB) > IMG_MAX_FILE_SIZE_MB;
-                const tamañoClass = tamañoExcedido ? 'text-red-500' : '';
+                // Verificar tamaño máximo según el tipo de archivo
+                const maxFileSize = imageData.is_video ? VIDEO_MAX_FILE_SIZE_MB : IMG_MAX_FILE_SIZE_MB;
+                const tamañoExcedido = parseFloat(info.TAMAÑO_MB) > maxFileSize;
+                const tamañoClass = tamañoExcedido ? 'text-red-500 font-bold' : '';
                 hasErrors = hasErrors || tamañoExcedido;
 
                 if (!imageData.is_video) {
                     // Verificar formato
-                    const formatoValido = IMG_ALLOWED_FORMATS.includes(imageData.info.FORMATO);
-                    const formatoClass = formatoValido ? '' : 'text-red-500';
+                    const formatoNormalizado = info.FORMATO.toLowerCase().replace('image/', '');
+                    const formatoValido = IMG_ALLOWED_FORMATS.some(format => 
+                        format.toLowerCase().replace('image/', '') === formatoNormalizado
+                    );
+                    const formatoClass = formatoValido ? '' : 'text-red-500 font-bold';
                     hasErrors = hasErrors || !formatoValido;
 
                     // Verificar resolución
                     const esVertical = info.ALTO > info.ANCHO;
-                    const resolucionCorrecta = (esVertical && info.ANCHO === IMG_VERTICAL_DIMENSIONS.width && info.ALTO === IMG_VERTICAL_DIMENSIONS.height) ||
-                                             (!esVertical && info.ANCHO === IMG_HORIZONTAL_DIMENSIONS.width && info.ALTO === IMG_HORIZONTAL_DIMENSIONS.height);
-                    const resolucionClass = resolucionCorrecta ? '' : 'text-red-500';
+                    const resolucionCorrecta = (esVertical && 
+                        info.ANCHO === IMG_VERTICAL_DIMENSIONS.width && 
+                        info.ALTO === IMG_VERTICAL_DIMENSIONS.height) ||
+                        (!esVertical && 
+                        info.ANCHO === IMG_HORIZONTAL_DIMENSIONS.width && 
+                        info.ALTO === IMG_HORIZONTAL_DIMENSIONS.height);
+                    const resolucionClass = resolucionCorrecta ? '' : 'text-red-500 font-bold';
                     hasErrors = hasErrors || !resolucionCorrecta;
 
                     // Verificar DPI
-                    const dpiCorrecto = Math.round(info.RESOLUCION_X) === IMG_REQUIRED_DPI && Math.round(info.RESOLUCION_Y) === IMG_REQUIRED_DPI;
-                    const dpiClass = dpiCorrecto ? '' : 'text-red-500';
+                    const dpiCorrecto = Math.round(info.RESOLUCION_X) === IMG_REQUIRED_DPI && 
+                                       Math.round(info.RESOLUCION_Y) === IMG_REQUIRED_DPI;
+                    const dpiClass = dpiCorrecto ? '' : 'text-red-500 font-bold';
                     hasErrors = hasErrors || !dpiCorrecto;
 
                     infoHtml += `
