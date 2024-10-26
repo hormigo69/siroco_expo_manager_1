@@ -10,6 +10,10 @@ import concurrent.futures
 from tqdm import tqdm
 import time
 import platform
+import sys
+from openpyxl import load_workbook
+from openpyxl.worksheet.table import Table, TableStyleInfo
+
 
 #activar el entorno virtual
 #source venv/bin/activate   
@@ -307,14 +311,58 @@ class ExpoProcessor:
         print("Proceso de movimiento de archivos completado.")
 
     def generate_summary(self):
+        # Importar las librerías necesarias
+        from openpyxl import load_workbook
+        from openpyxl.worksheet.table import Table, TableStyleInfo
+
         df = get_files_info_from_directory(self.carpeta_destino)
         
         if not df.empty:
             if 'NUMERO_PANTALLA' in df.columns:
                 df = df.sort_values('NUMERO_PANTALLA')
             
-            df.to_excel(os.path.join(self.full_output_path, 'Resumen obras.xlsx'), index=False)
-            print("Proceso de resumen de archivos completado.")
+            excel_path = os.path.join(self.full_output_path, 'Resumen obras.xlsx')
+            
+            # Guardar primero con pandas
+            df.to_excel(excel_path, index=False)
+            
+            # Abrir el archivo con openpyxl para añadir el formato de tabla
+            wb = load_workbook(excel_path)
+            ws = wb.active
+            
+            # Obtener el rango de la tabla
+            tabla_ref = f"A1:{chr(64 + len(df.columns))}{len(df.index) + 1}"
+            
+            # Crear la tabla con estilo
+            tabla = Table(displayName="TablaObras", ref=tabla_ref)
+            estilo = TableStyleInfo(
+                name="TableStyleMedium2", 
+                showFirstColumn=False,
+                showLastColumn=False,
+                showRowStripes=True,
+                showColumnStripes=False
+            )
+            tabla.tableStyleInfo = estilo
+            
+            # Añadir la tabla a la hoja
+            ws.add_table(tabla)
+            
+            # Ajustar el ancho de las columnas
+            for column in ws.columns:
+                max_length = 0
+                column = list(column)
+                for cell in column:
+                    try:
+                        if len(str(cell.value)) > max_length:
+                            max_length = len(str(cell.value))
+                    except:
+                        pass
+                adjusted_width = (max_length + 2)
+                ws.column_dimensions[column[0].column_letter].width = adjusted_width
+            
+            # Guardar los cambios
+            wb.save(excel_path)
+            print("Proceso de resumen de archivos completado con formato de tabla.")
         else:
             print("No se encontraron archivos para procesar.")
 
@@ -333,7 +381,14 @@ class Recodificador:
             os.makedirs(self.carpeta_destino)
             print(f"Carpeta '{self.carpeta_destino}' creada.")
         else:
+            # Verificar si la carpeta tiene contenido
+            if os.listdir(self.carpeta_destino):
+                respuesta = input("La carpeta 'procesados' ya existe y contiene archivos. ¿Desea volver a procesar los archivos? (s/n): ")
+                if respuesta.lower() != 's':
+                    print("Saltando el proceso de recodificación...")
+                    return False
             print(f"La carpeta '{self.carpeta_destino}' ya existe.")
+        return True
 
     def procesar_archivos(self):
         archivos = os.listdir(self.carpeta_origen)
@@ -523,24 +578,82 @@ class Recodificador:
                 else:
                     df.at[index, 'PROCESADO'] = 'No'
             
-            # Guardar el DataFrame actualizado en el mismo archivo Excel
+            # Guardar primero con pandas
             df.to_excel(self.excel_path, index=False)
-            print(f"Excel actualizado: {self.excel_path}")
+            
+            # Abrir el archivo con openpyxl para añadir el formato de tabla
+            wb = load_workbook(self.excel_path)
+            ws = wb.active
+            
+            # Obtener el rango de la tabla
+            tabla_ref = f"A1:{chr(64 + len(df.columns))}{len(df.index) + 1}"
+            
+            # Crear la tabla con estilo
+            tabla = Table(displayName="TablaObras", ref=tabla_ref)
+            estilo = TableStyleInfo(
+                name="TableStyleMedium2", 
+                showFirstColumn=False,
+                showLastColumn=False,
+                showRowStripes=True,
+                showColumnStripes=False
+            )
+            tabla.tableStyleInfo = estilo
+            
+            # Añadir la tabla a la hoja
+            ws.add_table(tabla)
+            
+            # Ajustar el ancho de las columnas
+            for column in ws.columns:
+                max_length = 0
+                column = list(column)
+                for cell in column:
+                    try:
+                        if len(str(cell.value)) > max_length:
+                            max_length = len(str(cell.value))
+                    except:
+                        pass
+                adjusted_width = (max_length + 2)
+                ws.column_dimensions[column[0].column_letter].width = adjusted_width
+            
+            # Guardar los cambios
+            wb.save(self.excel_path)
+            print(f"Excel actualizado con formato de tabla: {self.excel_path}")
         
         except Exception as e:
             print(f"Error al actualizar el Excel: {str(e)}")
 
 def main():
     expo_id = 'E998'
-    processor = ExpoProcessor(expo_id)
+    recodificador = Recodificador(expo_id)
+    carpeta_procesados = os.path.join(os.getcwd(), 'expos', expo_id, 'procesados')
     
+    # Verificar si ya existen archivos procesados
+    if os.path.exists(carpeta_procesados) and os.listdir(carpeta_procesados):
+        while True:
+            print("Se encontraron archivos procesados. ¿Quieres volver a procesar los archivos? (s/n): ", end='', flush=True)
+            try:
+                # Leemos la línea completa y eliminamos espacios y saltos de línea
+                respuesta = input().strip()
+                
+                if respuesta == 's':
+                    break
+                elif respuesta == 'n':
+                    print("Actualizando solo el Excel con los archivos existentes...")
+                    recodificador.actualizar_excel()
+                    return
+                print("Por favor, introduce 's' o 'n'")
+            except EOFError:
+                continue
+
+
+    # Si no hay archivos procesados o el usuario quiere reprocesar, continuar con el flujo normal
+    processor = ExpoProcessor(expo_id)
     processor.setup_directories()
     processor.unzip_files()
     processor.process_and_move_files()
     processor.generate_summary()
 
     # Proceso de recodificación
-    recodificador = Recodificador(expo_id)
     recodificador.crear_carpeta_procesados()
     recodificador.procesar_archivos()
     recodificador.actualizar_excel()
