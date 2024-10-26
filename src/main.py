@@ -623,7 +623,7 @@ class Recodificador:
             print(f"Error al actualizar el Excel: {str(e)}")
 
 def main():
-    expo_id = 'E998'
+    expo_id = 'E992'
     recodificador = Recodificador(expo_id)
     carpeta_procesados = os.path.join(os.getcwd(), 'expos', expo_id, 'procesados')
     
