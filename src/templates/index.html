@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Gestor de Exposiciones</title>
+    <title>Expo Manager</title>
     <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
     <style>
         .loader {
@@ -574,14 +574,35 @@
             const modal = document.getElementById('infoModal');
             const content = document.getElementById('infoContent');
             
-            content.innerHTML = `
+            let infoHtml = `
                 <p><strong>Nombre:</strong> ${filename}</p>
-                <p><strong>Pantalla:</strong> ${imageData.screenNumber}</p>
                 <p><strong>Tipo:</strong> ${imageData.is_video ? 'Video' : 'Imagen'}</p>
-                ${imageData.dimensions ? `<p><strong>Dimensiones:</strong> ${imageData.dimensions}</p>` : ''}
-                ${imageData.duration ? `<p><strong>Duración:</strong> ${imageData.duration}</p>` : ''}
             `;
+
+            if (imageData.info) {
+                const info = imageData.info;
+                infoHtml += `
+                    <p><strong>Dimensiones:</strong> ${info.ANCHO}x${info.ALTO}</p>
+                    <p><strong>Orientación:</strong> ${info.ORIENTACION}</p>
+                    <p><strong>Formato:</strong> ${info.FORMATO}</p>
+                    <p><strong>Tamaño:</strong> ${info.TAMAÑO_MB} MB</p>
+                `;
+
+                if (imageData.is_video) {
+                    infoHtml += `
+                        <p><strong>Duración:</strong> ${info.DURACION_SEG} segundos</p>
+                        <p><strong>FPS:</strong> ${info.FPS}</p>
+                        <p><strong>Códec:</strong> ${info.CÓDEC_VIDEO}</p>
+                        <p><strong>Tasa de bits:</strong> ${Math.round(info.TASA_BITS / 1000000)} Mbps</p>
+                    `;
+                } else if (info.RESOLUCION_X && info.RESOLUCION_Y) {
+                    infoHtml += `
+                        <p><strong>Resolución:</strong> ${Math.round(info.RESOLUCION_X)}x${Math.round(info.RESOLUCION_Y)} DPI</p>
+                    `;
+                }
+            }
             
+            content.innerHTML = infoHtml;
             modal.style.display = 'block';
         }
 
