@@ -1,0 +1,327 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gestor de Exposiciones</title>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <style>
+        .loader {
+            border: 4px solid #f3f3f3;
+            border-radius: 50%;
+            border-top: 4px solid #3498db;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        /* Estilos para los controles de video */
+        .video-container:hover .video-controls {
+            opacity: 1;
+        }
+        
+        .video-controls {
+            opacity: 0;
+            transition: opacity 0.3s;
+            background: linear-gradient(transparent, rgba(0,0,0,0.7));
+        }
+        
+        /* Personalizar la barra de progreso */
+        .progress {
+            height: 4px;
+            background: rgba(255,255,255,0.3);
+            cursor: pointer;
+            position: relative;
+        }
+        
+        .progress:hover {
+            height: 6px;
+            transition: height 0.1s ease-in-out;
+        }
+        
+        .progress-filled {
+            background: #3b82f6;
+            height: 100%;
+            width: 0%;
+            transition: width 0.1s linear;
+        }
+        
+        .progress::after {
+            content: '';
+            position: absolute;
+            top: -8px;
+            left: 0;
+            right: 0;
+            bottom: -8px;
+        }
+        
+        /* Ocultar controles nativos pero mantener funcionalidad */
+        video::-webkit-media-controls {
+            display: none !important;
+        }
+    </style>
+</head>
+<body class="bg-gray-900 text-gray-100 min-h-screen">
+    <div class="container mx-auto px-4 py-8">
+        <h1 class="text-4xl font-bold mb-8 text-center">Gestor de Exposiciones</h1>
+        
+        <div class="max-w-md mx-auto mb-8">
+            <form id="expoForm" class="bg-gray-800 rounded-lg p-6 shadow-lg">
+                <div class="mb-4">
+                    <label for="expo_id" class="block text-sm font-medium mb-2">ID de Exposición</label>
+                    <input type="text" id="expo_id" name="expo_id" 
+                           class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md focus:outline-none focus:border-blue-500"
+                           placeholder="Ej: E995">
+                </div>
+                <button type="submit" 
+                        class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-md transition duration-200">
+                    Cargar Imágenes
+                </button>
+            </form>
+        </div>
+
+        <div id="loader" class="hidden flex justify-center my-8">
+            <div class="loader"></div>
+        </div>
+
+        <div id="error" class="hidden text-red-500 text-center mb-8"></div>
+
+        <div id="imageGrid" class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4"></div>
+
+        <div id="processDialog" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center">
+            <div class="bg-gray-800 p-6 rounded-lg shadow-xl max-w-md w-full">
+                <h2 class="text-xl font-bold mb-4">¿Deseas procesar los archivos?</h2>
+                <div class="flex justify-end space-x-4">
+                    <button onclick="hideProcessDialog()" 
+                            class="px-4 py-2 bg-gray-600 hover:bg-gray-700 rounded-md">
+                        No
+                    </button>
+                    <button onclick="processFiles()" 
+                            class="px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-md">
+                        Sí
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        document.getElementById('expoForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const expo_id = document.getElementById('expo_id').value;
+            const loader = document.getElementById('loader');
+            const error = document.getElementById('error');
+            const imageGrid = document.getElementById('imageGrid');
+            
+            loader.classList.remove('hidden');
+            error.classList.add('hidden');
+            imageGrid.innerHTML = '';
+
+            try {
+                const formData = new FormData();
+                formData.append('expo_id', expo_id);
+
+                const response = await fetch('/load_images', {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                const data = await response.json();
+                
+                if (data.error) {
+                    error.textContent = data.error;
+                    error.classList.remove('hidden');
+                } else if (data.status === 'show_images') {
+                    data.images.forEach(image => {
+                        const div = document.createElement('div');
+                        div.className = 'relative bg-gray-800 p-2 rounded-lg';
+                        
+                        if (image.is_video) {
+                            div.innerHTML = `
+                                <div class="video-container relative">
+                                    <video 
+                                        class="w-full h-40 object-cover rounded-md" 
+                                        preload="metadata">
+                                        <source src="/expos/${expo_id}/ficheros_salida/${image.filename}" type="video/mp4">
+                                    </video>
+                                    <div class="video-controls absolute bottom-0 left-0 right-0 p-2 flex flex-col gap-1">
+                                        <div class="progress rounded-full">
+                                            <div class="progress-filled rounded-full"></div>
+                                        </div>
+                                        <div class="flex items-center justify-between">
+                                            <button class="play-pause-btn text-white p-1 rounded hover:bg-black hover:bg-opacity-30">
+                                                <svg class="w-5 h-5 play-icon" fill="currentColor" viewBox="0 0 20 20">
+                                                    <path d="M10 0a10 10 0 100 20 10 10 0 000-20zm4 10.5l-6 3.5V7l6 3.5z"/>
+                                                </svg>
+                                                <svg class="w-5 h-5 pause-icon hidden" fill="currentColor" viewBox="0 0 20 20">
+                                                    <path d="M5 4h3v12H5V4zm7 0h3v12h-3V4z"/>
+                                                </svg>
+                                            </button>
+                                            <span class="time-display text-white text-xs">0:00 / 0:00</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            `;
+                        } else {
+                            div.innerHTML = `
+                                <img src="${image.thumbnail}" class="w-full h-40 object-cover rounded-md" alt="${image.filename}">
+                            `;
+                        }
+                        
+                        div.innerHTML += `
+                            <p class="mt-2 text-sm text-gray-300 truncate">${image.filename}</p>
+                        `;
+                        
+                        imageGrid.appendChild(div);
+                        
+                        // Configurar controles de video si es un video
+                        if (image.is_video) {
+                            const container = div.querySelector('.video-container');
+                            const video = container.querySelector('video');
+                            const playPauseBtn = container.querySelector('.play-pause-btn');
+                            const progress = container.querySelector('.progress');
+                            const progressFilled = container.querySelector('.progress-filled');
+                            const timeDisplay = container.querySelector('.time-display');
+                            const playIcon = playPauseBtn.querySelector('.play-icon');
+                            const pauseIcon = playPauseBtn.querySelector('.pause-icon');
+
+                            let isDragging = false;
+
+                            // Función para formatear tiempo
+                            const formatTime = seconds => {
+                                const mins = Math.floor(seconds / 60);
+                                const secs = Math.floor(seconds % 60);
+                                return `${mins}:${secs < 10 ? '0' : ''}${secs}`;
+                            };
+
+                            // Función para actualizar el tiempo basado en la posición del mouse
+                            const scrub = (e) => {
+                                const progressRect = progress.getBoundingClientRect();
+                                const percent = Math.min(Math.max(0, e.clientX - progressRect.left), progressRect.width) / progressRect.width;
+                                const scrubTime = percent * video.duration;
+                                if (isDragging) {
+                                    e.preventDefault();
+                                    progressFilled.style.width = `${percent * 100}%`;
+                                    timeDisplay.textContent = `${formatTime(scrubTime)} / ${formatTime(video.duration)}`;
+                                    video.currentTime = scrubTime;
+                                }
+                            };
+
+                            // Manejar click en play/pause
+                            playPauseBtn.addEventListener('click', () => {
+                                if (video.paused) {
+                                    video.play();
+                                    playIcon.classList.add('hidden');
+                                    pauseIcon.classList.remove('hidden');
+                                } else {
+                                    video.pause();
+                                    playIcon.classList.remove('hidden');
+                                    pauseIcon.classList.add('hidden');
+                                }
+                            });
+
+                            // Eventos para el arrastre de la línea de tiempo
+                            progress.addEventListener('mousedown', (e) => {
+                                isDragging = true;
+                                scrub(e);
+                            });
+
+                            document.addEventListener('mousemove', (e) => {
+                                if (isDragging) scrub(e);
+                            });
+
+                            document.addEventListener('mouseup', () => {
+                                isDragging = false;
+                            });
+
+                            // Mostrar preview al hover sobre la línea de tiempo
+                            progress.addEventListener('mousemove', (e) => {
+                                if (!isDragging) {
+                                    const progressRect = progress.getBoundingClientRect();
+                                    const percent = Math.min(Math.max(0, e.clientX - progressRect.left), progressRect.width) / progressRect.width;
+                                    const previewTime = percent * video.duration;
+                                    timeDisplay.textContent = `${formatTime(previewTime)} / ${formatTime(video.duration)}`;
+                                }
+                            });
+
+                            // Restaurar display de tiempo actual al salir de la línea de tiempo
+                            progress.addEventListener('mouseleave', () => {
+                                if (!isDragging) {
+                                    timeDisplay.textContent = `${formatTime(video.currentTime)} / ${formatTime(video.duration)}`;
+                                }
+                            });
+
+                            // Actualizar barra de progreso durante la reproducción
+                            video.addEventListener('timeupdate', () => {
+                                if (!isDragging) {
+                                    const percent = (video.currentTime / video.duration) * 100;
+                                    progressFilled.style.width = `${percent}%`;
+                                    timeDisplay.textContent = `${formatTime(video.currentTime)} / ${formatTime(video.duration)}`;
+                                }
+                            });
+
+                            // Resetear al terminar
+                            video.addEventListener('ended', () => {
+                                video.currentTime = 0;
+                                playIcon.classList.remove('hidden');
+                                pauseIcon.classList.add('hidden');
+                            });
+                        }
+                    });
+                    
+                    document.getElementById('processDialog').classList.remove('hidden');
+                } else if (data.status === 'ask_unzip') {
+                    const div = document.createElement('div');
+                    div.className = 'bg-gray-800 p-6 rounded-lg text-center';
+                    div.innerHTML = `
+                        <p class="mb-4">Se encontraron los siguientes archivos ZIP:</p>
+                        <ul class="mb-4 text-gray-300">
+                            ${data.zip_files.map(zip => `<li>${zip}</li>`).join('')}
+                        </ul>
+                        <p class="mb-4">¿Deseas descomprimir los archivos?</p>
+                        <div class="flex justify-center space-x-4">
+                            <button onclick="cancelUnzip()" 
+                                    class="px-4 py-2 bg-gray-600 hover:bg-gray-700 rounded-md">
+                                No
+                            </button>
+                            <button onclick="unzipFiles()" 
+                                    class="px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-md">
+                                Sí
+                            </button>
+                        </div>
+                    `;
+                    imageGrid.appendChild(div);
+                }
+            } catch (err) {
+                error.textContent = 'Error al cargar las imágenes';
+                error.classList.remove('hidden');
+            } finally {
+                loader.classList.add('hidden');
+            }
+        });
+
+        function hideProcessDialog() {
+            document.getElementById('processDialog').classList.add('hidden');
+        }
+
+        function processFiles() {
+            hideProcessDialog();
+            // Aquí se implementará la lógica de procesamiento
+        }
+
+        function cancelUnzip() {
+            document.getElementById('imageGrid').innerHTML = '';
+        }
+
+        function unzipFiles() {
+            // Aquí implementaremos la lógica para descomprimir los archivos
+            // Por ahora solo limpiamos la pantalla
+            document.getElementById('imageGrid').innerHTML = '';
+        }
+    </script>
+</body>
+</html>
