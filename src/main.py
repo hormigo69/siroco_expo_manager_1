@@ -29,31 +29,32 @@ class FileManager:
         obras_path = os.path.join(output_path, 'Obras')
         os.makedirs(obras_path, exist_ok=True)
 
-        with zipfile.ZipFile(zip_path, 'r') as zip_ref:
-            for file_info in zip_ref.infolist():
-                if file_info.filename.startswith('__MACOSX') or file_info.filename.startswith('.'):
-                    continue  # Skip macOS-specific files and hidden files
-                
-                # Remove the root folder name if it exists
-                parts = file_info.filename.split('/', 1)
-                if len(parts) > 1:
-                    relative_path = parts[1]
-                else:
-                    relative_path = file_info.filename
+        # Buscar todos los archivos zip en la carpeta
+        zip_files = glob.glob(os.path.join(output_path, "*.zip"))
+        
+        for zip_path in zip_files:
+            print(f"Procesando archivo zip: {zip_path}")
+            
+            with zipfile.ZipFile(zip_path, 'r') as zip_ref:
+                for file_info in zip_ref.infolist():
+                    if file_info.filename.startswith('__MACOSX') or file_info.filename.startswith('.'):
+                        continue  # Saltar archivos específicos de macOS y archivos ocultos
+                    
+                    # Mantener la estructura de carpetas interna
+                    target_path = os.path.join(obras_path, file_info.filename)
+                    
+                    # Saltar directorios vacíos
+                    if file_info.filename.endswith('/'):
+                        continue
 
-                # Skip empty filenames or directories
-                if not relative_path or relative_path.endswith('/'):
-                    continue
-
-                # Extract the file
-                target_path = os.path.join(obras_path, relative_path)
-                os.makedirs(os.path.dirname(target_path), exist_ok=True)
-                
-                try:
-                    with zip_ref.open(file_info) as source, open(target_path, "wb") as target:
-                        shutil.copyfileobj(source, target)
-                except Exception as e:
-                    print(f"Error extracting {file_info.filename}: {str(e)}")
+                    # Extraer el archivo
+                    os.makedirs(os.path.dirname(target_path), exist_ok=True)
+                    
+                    try:
+                        with zip_ref.open(file_info) as source, open(target_path, "wb") as target:
+                            shutil.copyfileobj(source, target)
+                    except Exception as e:
+                        print(f"Error al extraer {file_info.filename}: {str(e)}")
 
         print(f"Contenido descomprimido en: {obras_path}")
 
@@ -530,7 +531,7 @@ class Recodificador:
             print(f"Error al actualizar el Excel: {str(e)}")
 
 def main():
-    expo_id = 'E993'
+    expo_id = 'E998'
     processor = ExpoProcessor(expo_id)
     
     processor.setup_directories()

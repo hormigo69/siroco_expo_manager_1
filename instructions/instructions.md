@@ -180,6 +180,8 @@ E991 Artista con obras en video: 19S_oct_PÁJARO NEGRO__E017 (Ojo, es muy grande
 https://drive.google.com/drive/folders/1ehmehBOT0mLrs2no00xFheGmxr_XRgRx?usp=sharing
 
 
+E998 video e imágenes: 25V_oct_FERNANDO NAVAJO__E018
+https://drive.google.com/drive/folders/1k_hvDLX_WnXMR_fsI3WXxE_ejfGhgTxP?usp=sharing
 
 
 
