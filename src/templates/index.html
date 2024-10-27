@@ -737,6 +737,9 @@
                             console.log('Valor a validar:', value);
                             console.log('Codecs permitidos:', VIDEO_ALLOWED_CODECS);
                             return VIDEO_ALLOWED_CODECS.includes(value);
+                        case 'dpi':
+                            if (value === 'N/A') return false;
+                            return parseFloat(value) === parseFloat(ideal);
                         default:
                             return true;
                     }
@@ -798,6 +801,12 @@
                 if (imageData && imageData.info) {
                     const info = imageData.info;
                     
+                    // Actualizar el título de la modal con el nombre del archivo
+                    const modalTitle = document.querySelector('#infoModal h3');
+                    if (modalTitle) {
+                        modalTitle.textContent = filename;
+                    }
+
                     // Formatear el tamaño del archivo
                     let tamaño = parseFloat(info.TAMAÑO_MB);
                     let unidad = 'MB';
@@ -817,9 +826,19 @@
                             `${IMG_VERTICAL_DIMENSIONS.width}×${IMG_VERTICAL_DIMENSIONS.height}` : 
                             `${IMG_HORIZONTAL_DIMENSIONS.width}×${IMG_HORIZONTAL_DIMENSIONS.height}`);
 
+                    // Formatear la resolución
+                    let resolucion = 'N/A';
+                    if (info.RESOLUCION_X && info.RESOLUCION_Y) {
+                        if (info.RESOLUCION_X === info.RESOLUCION_Y) {
+                            resolucion = `${info.RESOLUCION_X}`;
+                        } else {
+                            resolucion = `${info.RESOLUCION_X}×${info.RESOLUCION_Y}`;
+                        }
+                    }
+
                     infoHtml = `
-                        ${createInfoRow('Nombre', filename)}
                         ${createInfoRow('Dimensiones', `${info.ANCHO}×${info.ALTO}`, idealDimensions, 'dimensions')}
+                        ${!imageData.is_video ? createInfoRow('Resolución', `${resolucion} DPI`, `${IMG_REQUIRED_DPI} DPI`, 'dpi') : ''}
                         ${createInfoRow('Formato', info.FORMATO, 
                             getDisplayFormat(imageData.is_video ? VIDEO_ALLOWED_FORMAT : IMG_ALLOWED_FORMATS, 'format'), 
                             'format')}
