@@ -716,7 +716,15 @@
                         case 'dimensions':
                             return value === ideal;
                         case 'size':
-                            return parseFloat(value) <= parseFloat(ideal);
+                            // Convertir todo a MB para la comparación
+                            const valueNum = parseFloat(value.split(' ')[0]);
+                            const valueUnit = value.split(' ')[1];
+                            const idealNum = parseFloat(ideal.split(' ')[0]);
+                            
+                            // Convertir a MB si está en GB
+                            const valueInMB = valueUnit === 'GB' ? valueNum * 1024 : valueNum;
+                            
+                            return valueInMB <= idealNum;
                         case 'fps':
                             return parseFloat(value) <= parseFloat(ideal);
                         case 'bitrate':
