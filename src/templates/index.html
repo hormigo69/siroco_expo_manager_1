@@ -710,7 +710,8 @@
                             
                             return valueInMB <= idealNum;
                         case 'fps':
-                            return parseFloat(value) <= parseFloat(ideal);
+                            // Mostrar en rojo si no es exactamente 30 FPS
+                            return parseFloat(value) === parseFloat(ideal);
                         case 'bitrate':
                             const [min, max] = ideal.split('-').map(v => parseFloat(v));
                             const current = parseFloat(value);
