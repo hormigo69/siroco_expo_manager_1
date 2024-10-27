@@ -151,12 +151,51 @@
             top: 50%;
             left: 50%;
             transform: translate(-50%, -50%);
-            background: rgba(17, 24, 39, 0.95);
+            background: rgb(17, 24, 39);
+            color: #fff;
             padding: 1.5rem;
             border-radius: 0.5rem;
             z-index: 50;
             max-width: 90%;
             width: 400px;
+        }
+
+        /* Añadir estilo para el overlay */
+        .modal-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.5);
+            z-index: 40;
+        }
+
+        .info-label {
+            color: #9CA3AF;  /* text-gray-400 */
+            font-size: 0.875rem;  /* text-sm */
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .info-value {
+            color: #F3F4F6;  /* text-gray-100 */
+            font-size: 1.125rem;  /* text-lg */
+            font-weight: 500;
+            word-break: break-word;
+        }
+
+        .info-row {
+            margin-bottom: 1rem;
+            padding-bottom: 0.5rem;
+            border-bottom: 1px solid rgba(156, 163, 175, 0.1);  /* border-gray-400 con opacidad */
+        }
+
+        .info-row:last-child {
+            border-bottom: none;
+            margin-bottom: 0;
+            padding-bottom: 0;
         }
     </style>
 </head>
@@ -207,10 +246,6 @@
         <div id="infoModal" class="info-modal">
             <h3 class="text-xl font-bold mb-4">Información del archivo</h3>
             <div id="infoContent" class="space-y-2"></div>
-            <button onclick="closeInfoModal()" 
-                    class="mt-4 px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-md w-full">
-                Cerrar
-            </button>
         </div>
     </div>
 
@@ -616,104 +651,84 @@
 
         // Añadir estas nuevas funciones al final del script
         function showInfo(filename, imageData) {
-            const modal = document.getElementById('infoModal');
-            const content = document.getElementById('infoContent');
-            const infoIcon = document.querySelector(`[data-filename="${filename}"] .info-icon`);
-            
-            let hasErrors = false;
-            
-            let infoHtml = `
-                <p><strong>Nombre:</strong> ${filename}</p>
-                <p><strong>Tipo:</strong> ${imageData.is_video ? 'Video' : 'Imagen'}</p>
-            `;
-
-            if (imageData.info) {
-                const info = imageData.info;
+            try {
+                const modal = document.getElementById('infoModal');
+                // Crear y mostrar el overlay
+                let overlay = document.querySelector('.modal-overlay');
+                if (!overlay) {
+                    overlay = document.createElement('div');
+                    overlay.className = 'modal-overlay';
+                    document.body.appendChild(overlay);
+                }
+                overlay.style.display = 'block';
+                modal.style.display = 'block';
                 
-                // Formatear el tamaño del archivo
-                let tamaño = parseFloat(info.TAMAÑO_MB);
-                let unidad = 'MB';
-                if (tamaño >= 1024) {
-                    tamaño = (tamaño / 1024).toFixed(2);
-                    unidad = 'GB';
-                } else {
-                    tamaño = tamaño.toFixed(2);
-                }
+                let infoHtml = '';
+                
+                // Función helper para crear filas de información
+                const createInfoRow = (label, value) => `
+                    <div class="info-row">
+                        <div class="info-label">${label}</div>
+                        <div class="info-value">${value}</div>
+                    </div>
+                `;
 
-                // Verificar tamaño máximo según el tipo de archivo
-                const maxFileSize = imageData.is_video ? VIDEO_MAX_FILE_SIZE_MB : IMG_MAX_FILE_SIZE_MB;
-                const tamañoExcedido = parseFloat(info.TAMAÑO_MB) > maxFileSize;
-                const tamañoClass = tamañoExcedido ? 'text-red-500 font-bold' : '';
-                hasErrors = hasErrors || tamañoExcedido;
+                if (imageData && imageData.info) {
+                    const info = imageData.info;
+                    
+                    // Formatear el tamaño del archivo
+                    let tamaño = parseFloat(info.TAMAÑO_MB);
+                    let unidad = 'MB';
+                    if (tamaño >= 1024) {
+                        tamaño = (tamaño / 1024).toFixed(2);
+                        unidad = 'GB';
+                    } else {
+                        tamaño = tamaño.toFixed(2);
+                    }
 
-                if (!imageData.is_video) {
-                    // Verificar formato
-                    const formatoNormalizado = info.FORMATO.toLowerCase().replace('image/', '');
-                    const formatoValido = IMG_ALLOWED_FORMATS.some(format => 
-                        format.toLowerCase().replace('image/', '') === formatoNormalizado
-                    );
-                    const formatoClass = formatoValido ? '' : 'text-red-500 font-bold';
-                    hasErrors = hasErrors || !formatoValido;
-
-                    // Verificar resolución
-                    const esVertical = info.ALTO > info.ANCHO;
-                    const resolucionCorrecta = (esVertical && 
-                        info.ANCHO === IMG_VERTICAL_DIMENSIONS.width && 
-                        info.ALTO === IMG_VERTICAL_DIMENSIONS.height) ||
-                        (!esVertical && 
-                        info.ANCHO === IMG_HORIZONTAL_DIMENSIONS.width && 
-                        info.ALTO === IMG_HORIZONTAL_DIMENSIONS.height);
-                    const resolucionClass = resolucionCorrecta ? '' : 'text-red-500 font-bold';
-                    hasErrors = hasErrors || !resolucionCorrecta;
-
-                    // Verificar DPI
-                    const dpiCorrecto = Math.round(info.RESOLUCION_X) === IMG_REQUIRED_DPI && 
-                                       Math.round(info.RESOLUCION_Y) === IMG_REQUIRED_DPI;
-                    const dpiClass = dpiCorrecto ? '' : 'text-red-500 font-bold';
-                    hasErrors = hasErrors || !dpiCorrecto;
-
-                    infoHtml += `
-                        <p><strong>Dimensiones:</strong> <span class="${resolucionClass}">${info.ANCHO}x${info.ALTO}</span></p>
-                        <p><strong>Formato:</strong> <span class="${formatoClass}">${info.FORMATO}</span></p>
-                        <p><strong>Tamaño:</strong> <span class="${tamañoClass}">${tamaño} ${unidad}</span></p>
-                        <p><strong>Resolución:</strong> <span class="${dpiClass}">${Math.round(info.RESOLUCION_X)}x${Math.round(info.RESOLUCION_Y)} DPI</span></p>
+                    infoHtml = `
+                        ${createInfoRow('Nombre', filename)}
+                        ${createInfoRow('Tipo', imageData.is_video ? 'Video' : 'Imagen')}
+                        ${createInfoRow('Dimensiones', `${info.ANCHO}×${info.ALTO}`)}
+                        ${createInfoRow('Formato', info.FORMATO)}
+                        ${createInfoRow('Tamaño', `${tamaño} ${unidad}`)}
                     `;
-                } else {
-                    infoHtml += `
-                        <p><strong>Dimensiones:</strong> ${info.ANCHO}x${info.ALTO}</p>
-                        <p><strong>Formato:</strong> ${info.FORMATO}</p>
-                        <p><strong>Tamaño:</strong> <span class="${tamañoClass}">${tamaño} ${unidad}</span></p>
-                        <p><strong>Duración:</strong> ${info.DURACION_SEG} segundos</p>
-                        <p><strong>FPS:</strong> ${info.FPS}</p>
-                        <p><strong>Códec:</strong> ${info.CÓDEC_VIDEO}</p>
-                        <p><strong>Tasa de bits:</strong> ${Math.round(info.TASA_BITS / 1000000)} Mbps</p>
-                    `;
-                }
-            }
-            
-            content.innerHTML = infoHtml;
-            modal.style.display = 'block';
 
-            // Actualizar el color del icono de info
-            if (hasErrors) {
-                infoIcon.classList.add('text-red-500');
-                infoIcon.querySelector('svg').setAttribute('stroke', 'rgb(239, 68, 68)'); // color rojo de Tailwind
-            } else {
-                infoIcon.classList.remove('text-red-500');
-                infoIcon.querySelector('svg').setAttribute('stroke', 'currentColor');
+                    if (imageData.is_video) {
+                        infoHtml += `
+                            ${createInfoRow('Duración', `${info.DURACION_SEG} segundos`)}
+                            ${createInfoRow('FPS', info.FPS)}
+                            ${createInfoRow('Códec', info.CÓDEC_VIDEO)}
+                            ${createInfoRow('Tasa de bits', `${Math.round(info.TASA_BITS / 1000000)} Mbps`)}
+                        `;
+                    }
+                } else {
+                    infoHtml = `<div class="info-row">No hay información disponible</div>`;
+                }
+                
+                const infoContent = document.getElementById('infoContent');
+                if (infoContent) {
+                    infoContent.innerHTML = infoHtml;
+                }
+            } catch (error) {
+                console.error('Error al mostrar la información:', error);
             }
         }
 
-        function closeInfoModal() {
-            document.getElementById('infoModal').style.display = 'none';
-        }
-
-        // Cerrar modal al hacer clic fuera de él
-        window.onclick = function(event) {
+        // Modificar el event listener para cerrar al hacer clic fuera
+        document.addEventListener('click', function(event) {
             const modal = document.getElementById('infoModal');
-            if (event.target === modal) {
+            const overlay = document.querySelector('.modal-overlay');
+            if (event.target === overlay) {
                 closeInfoModal();
             }
+        });
+
+        function closeInfoModal() {
+            const modal = document.getElementById('infoModal');
+            const overlay = document.querySelector('.modal-overlay');
+            if (modal) modal.style.display = 'none';
+            if (overlay) overlay.style.display = 'none';
         }
     </script>
 </body>
