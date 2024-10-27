@@ -197,6 +197,46 @@
             margin-bottom: 0;
             padding-bottom: 0;
         }
+
+        .ideal-value {
+            color: #9CA3AF;  /* text-gray-400 */
+            font-size: 0.875rem;
+            margin-left: 0.5rem;
+            font-weight: normal;
+        }
+
+        .info-value {
+            color: #F3F4F6;
+            font-size: 1.125rem;
+            font-weight: 500;
+            word-break: break-word;
+            display: flex;
+            align-items: baseline;
+            flex-wrap: wrap;
+            gap: 0.5rem;
+        }
+
+        .text-red-500 {
+            color: rgb(239, 68, 68);
+        }
+
+        .info-value {
+            color: #F3F4F6;
+            font-size: 1.125rem;
+            font-weight: 500;
+            word-break: break-word;
+            display: flex;
+            align-items: baseline;
+            flex-wrap: wrap;
+            gap: 0.5rem;
+        }
+
+        .ideal-value {
+            color: #9CA3AF;
+            font-size: 0.875rem;
+            margin-left: 0.5rem;
+            font-weight: normal;
+        }
     </style>
 </head>
 <body class="bg-gray-900 text-gray-100 min-h-screen">
@@ -209,7 +249,8 @@
                     <label for="expo_id" class="block text-sm font-medium mb-2">ID de Exposición</label>
                     <input type="text" id="expo_id" name="expo_id" 
                            class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md focus:outline-none focus:border-blue-500"
-                           placeholder="Ej: E995">
+                           placeholder="Ej: E995"
+                           autofocus>
                 </div>
                 <button type="submit" 
                         class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-md transition duration-200">
@@ -252,7 +293,12 @@
     <script>
         // Constantes de validación para imágenes
         const IMG_MAX_FILE_SIZE_MB = 300;  // Cambiado a 300MB
-        const IMG_ALLOWED_FORMATS = ['image/png', 'image/jpeg', 'image/jpg', 'image/JPEG', 'image/JPG'];
+        const IMG_ALLOWED_FORMATS = [
+            'image/png', 'image/jpeg', 'image/jpg', 
+            'image/JPEG', 'image/JPG',
+            'PNG', 'JPEG', 'JPG',
+            'png', 'jpeg', 'jpg'
+        ];
         const IMG_VERTICAL_DIMENSIONS = {
             width: 2160,
             height: 3840
@@ -265,7 +311,7 @@
 
         // Constantes de validación para vídeos
         const VIDEO_MAX_FILE_SIZE_MB = 500;  // Cambiado a 500MB
-        const VIDEO_ALLOWED_FORMAT = 'video/mp4';
+        const VIDEO_ALLOWED_FORMAT = ['video/mp4', 'mp4', 'MP4'];  // Añadimos las variantes
         const VIDEO_VERTICAL_DIMENSIONS = {
             width: 2160,
             height: 3840
@@ -277,7 +323,7 @@
         const VIDEO_MAX_FPS = 30;
         const VIDEO_MIN_BITRATE = 30; // Mbps
         const VIDEO_MAX_BITRATE = 60; // Mbps
-        const VIDEO_ALLOWED_CODECS = ['H.265', 'H.264'];
+        const VIDEO_ALLOWED_CODECS = ['H.265', 'H.264', 'h264', 'h265', 'hevc', 'HEVC'];
 
         async function processExpo(expo_id) {
             try {
@@ -665,13 +711,81 @@
                 
                 let infoHtml = '';
                 
-                // Función helper para crear filas de información
-                const createInfoRow = (label, value) => `
-                    <div class="info-row">
-                        <div class="info-label">${label}</div>
-                        <div class="info-value">${value}</div>
-                    </div>
-                `;
+                const isInRange = (value, ideal, type) => {
+                    switch(type) {
+                        case 'dimensions':
+                            return value === ideal;
+                        case 'size':
+                            return parseFloat(value) <= parseFloat(ideal);
+                        case 'fps':
+                            return parseFloat(value) <= parseFloat(ideal);
+                        case 'bitrate':
+                            const [min, max] = ideal.split('-').map(v => parseFloat(v));
+                            const current = parseFloat(value);
+                            return current >= min && current <= max;
+                        case 'format':
+                            return ideal.includes(value);
+                        case 'codec':
+                            console.log('Valor a validar:', value);
+                            console.log('Codecs permitidos:', VIDEO_ALLOWED_CODECS);
+                            return VIDEO_ALLOWED_CODECS.includes(value);
+                        default:
+                            return true;
+                    }
+                };
+
+                const createInfoRow = (label, value, idealValue = null, type = null) => {
+                    const isValid = !idealValue || (
+                        type === 'codec' ? VIDEO_ALLOWED_CODECS.includes(value) :
+                        type === 'format' ? (
+                            imageData.is_video ? 
+                            VIDEO_ALLOWED_FORMAT.includes(value) : 
+                            IMG_ALLOWED_FORMATS.includes(value)
+                        ) :
+                        isInRange(value, idealValue, type)
+                    );
+                    
+                    return `
+                        <div class="info-row">
+                            <div class="info-label">${label}</div>
+                            <div class="info-value">
+                                <span class="${!isValid ? 'text-red-500' : ''}">${value}</span>
+                                ${idealValue ? `<span class="ideal-value">Ideal: ${idealValue}</span>` : ''}
+                            </div>
+                        </div>
+                    `;
+                };
+
+                // Función para simplificar la presentación de formatos
+                const formatDisplayNames = {
+                    'image/png': 'PNG',
+                    'image/jpeg': 'JPEG',
+                    'image/jpg': 'JPG',
+                    'image/JPEG': 'JPEG',
+                    'image/JPG': 'JPG',
+                    'video/mp4': 'MP4',
+                    'H.265': 'H.264/AVC',
+                    'H.264': 'H.264/AVC',
+                    'h264': 'H.264/AVC',
+                    'h265': 'H.265/HEVC'
+                };
+
+                const getDisplayFormat = (format, type) => {
+                    if (type === 'format') {
+                        if (Array.isArray(format)) {
+                            // Filtrar solo los formatos en mayúsculas
+                            const uniqueFormats = format.filter(f => 
+                                f === f.toUpperCase() && !f.includes('image/') && !f.includes('video/')
+                            );
+                            return [...new Set(uniqueFormats)].join(', ');
+                        }
+                        return format;
+                    }
+                    if (type === 'codec') {
+                        return 'H.265/HEVC o H.264/AVC';
+                    }
+                    return format;
+                };
 
                 if (imageData && imageData.info) {
                     const info = imageData.info;
@@ -686,20 +800,35 @@
                         tamaño = tamaño.toFixed(2);
                     }
 
+                    const maxSize = imageData.is_video ? `${VIDEO_MAX_FILE_SIZE_MB} MB` : `${IMG_MAX_FILE_SIZE_MB} MB`;
+                    const idealDimensions = imageData.is_video ? 
+                        (info.ALTO > info.ANCHO ? 
+                            `${VIDEO_VERTICAL_DIMENSIONS.width}×${VIDEO_VERTICAL_DIMENSIONS.height}` : 
+                            `${VIDEO_HORIZONTAL_DIMENSIONS.width}×${VIDEO_HORIZONTAL_DIMENSIONS.height}`) :
+                        (info.ALTO > info.ANCHO ? 
+                            `${IMG_VERTICAL_DIMENSIONS.width}×${IMG_VERTICAL_DIMENSIONS.height}` : 
+                            `${IMG_HORIZONTAL_DIMENSIONS.width}×${IMG_HORIZONTAL_DIMENSIONS.height}`);
+
                     infoHtml = `
                         ${createInfoRow('Nombre', filename)}
-                        ${createInfoRow('Tipo', imageData.is_video ? 'Video' : 'Imagen')}
-                        ${createInfoRow('Dimensiones', `${info.ANCHO}×${info.ALTO}`)}
-                        ${createInfoRow('Formato', info.FORMATO)}
-                        ${createInfoRow('Tamaño', `${tamaño} ${unidad}`)}
+                        ${createInfoRow('Dimensiones', `${info.ANCHO}×${info.ALTO}`, idealDimensions, 'dimensions')}
+                        ${createInfoRow('Formato', info.FORMATO, 
+                            getDisplayFormat(imageData.is_video ? VIDEO_ALLOWED_FORMAT : IMG_ALLOWED_FORMATS, 'format'), 
+                            'format')}
+                        ${createInfoRow('Tamaño', `${tamaño} ${unidad}`, maxSize, 'size')}
                     `;
 
                     if (imageData.is_video) {
                         infoHtml += `
                             ${createInfoRow('Duración', `${info.DURACION_SEG} segundos`)}
-                            ${createInfoRow('FPS', info.FPS)}
-                            ${createInfoRow('Códec', info.CÓDEC_VIDEO)}
-                            ${createInfoRow('Tasa de bits', `${Math.round(info.TASA_BITS / 1000000)} Mbps`)}
+                            ${createInfoRow('FPS', info.FPS, `${VIDEO_MAX_FPS}`, 'fps')}
+                            ${createInfoRow('Códec', info.CÓDEC_VIDEO, 
+                                getDisplayFormat(VIDEO_ALLOWED_CODECS, 'codec'), 
+                                'codec')}
+                            ${createInfoRow('Tasa de bits', 
+                                `${Math.round(info.TASA_BITS / 1000000)} Mbps`, 
+                                `${VIDEO_MIN_BITRATE}-${VIDEO_MAX_BITRATE} Mbps`, 
+                                'bitrate')}
                         `;
                     }
                 } else {
@@ -730,6 +859,10 @@
             if (modal) modal.style.display = 'none';
             if (overlay) overlay.style.display = 'none';
         }
+
+        document.addEventListener('DOMContentLoaded', function() {
+            document.getElementById('expo_id').focus();
+        });
     </script>
 </body>
 </html>
