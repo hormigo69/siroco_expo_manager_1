@@ -356,7 +356,7 @@
                 console.log('4. Datos de imágenes recibidos:', data);
 
                 if (data.status === 'show_images' && data.images) {
-                    // **Asignar screenNumber a cada imagen**
+                    // Mapear y ordenar las imágenes por screenNumber
                     const imagesWithScreen = data.images.map(image => {
                         const screenMatch = image.filename.match(/P(\d{3})/);
                         const screenNumber = screenMatch ? parseInt(screenMatch[1]) : 999;
@@ -369,7 +369,11 @@
                     
                     // Mostrar el botón de resumen
                     const showValidationBtn = document.getElementById('showValidationBtn');
-                    showValidationBtn.style.display = 'block';
+                    if (showValidationBtn) {
+                        showValidationBtn.style.display = 'block';
+                        showValidationBtn.classList.remove('hidden');
+                        console.log('8. Botón de resumen visible');
+                    }
 
                     // Mostrar las miniaturas en el grid
                     const imageGrid = document.getElementById('imageGrid');
@@ -420,7 +424,7 @@
                                 </div>
                             `;
                             
-                            // Añadir los event listeners para el video...
+                            // Añadir los event listeners para el video
                             const container = div.querySelector('.video-container');
                             const video = container.querySelector('video');
                             const playPauseBtn = container.querySelector('.play-pause-btn');
@@ -491,7 +495,7 @@
                             `;
                         }
                         
-                        // Solo asignar el gridColumn
+                        // Asignar gridColumn span según orientación
                         div.style.gridColumn = isHorizontal ? 'span 2' : 'span 1';
                         
                         imageGrid.appendChild(div);
@@ -601,13 +605,8 @@
         function showInfo(filename, imageData) {
             try {
                 const modal = document.getElementById('infoModal');
-                // Crear y mostrar el overlay
-                let overlay = document.querySelector('.modal-overlay');
-                if (!overlay) {
-                    overlay = document.createElement('div');
-                    overlay.className = 'modal-overlay';
-                    document.body.appendChild(overlay);
-                }
+                // Mostrar el overlay
+                const overlay = document.querySelector('.modal-overlay');
                 overlay.style.display = 'block';
                 modal.style.display = 'block';
                 
@@ -794,14 +793,6 @@
         // Asegurar que el input esté enfocado al cargar la página
         document.addEventListener('DOMContentLoaded', function() {
             document.getElementById('expo_id').focus();
-            
-            // Asegurar que el botón de resumen tenga el event listener
-            const showValidationBtn = document.getElementById('showValidationBtn');
-            if (showValidationBtn) {
-                showValidationBtn.addEventListener('click', function() {
-                    toggleValidationSummary();
-                });
-            }
         });
 
         // Función para actualizar el resumen de validación
