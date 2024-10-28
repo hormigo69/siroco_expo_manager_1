@@ -194,6 +194,10 @@
             font-size: 1.125rem;  /* text-lg */
             font-weight: 500;
             word-break: break-word;
+            display: flex;
+            align-items: baseline;
+            flex-wrap: wrap;
+            gap: 0.5rem;
         }
 
         .info-row {
@@ -215,37 +219,8 @@
             font-weight: normal;
         }
 
-        .info-value {
-            color: #F3F4F6;
-            font-size: 1.125rem;
-            font-weight: 500;
-            word-break: break-word;
-            display: flex;
-            align-items: baseline;
-            flex-wrap: wrap;
-            gap: 0.5rem;
-        }
-
         .text-red-500 {
             color: rgb(239, 68, 68);
-        }
-
-        .info-value {
-            color: #F3F4F6;
-            font-size: 1.125rem;
-            font-weight: 500;
-            word-break: break-word;
-            display: flex;
-            align-items: baseline;
-            flex-wrap: wrap;
-            gap: 0.5rem;
-        }
-
-        .ideal-value {
-            color: #9CA3AF;
-            font-size: 0.875rem;
-            margin-left: 0.5rem;
-            font-weight: normal;
         }
     </style>
 </head>
@@ -277,11 +252,31 @@
 
         <div id="imageGrid" class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4"></div>
 
-        <!-- Añadir el modal de información justo antes del cierre del div.container -->
+        <!-- Modal de información -->
         <div id="infoModal" class="info-modal">
             <h3 class="text-xl font-bold mb-4">Información del archivo</h3>
             <div id="infoContent" class="space-y-2"></div>
         </div>
+
+        <!-- Overlay para el modal -->
+        <div class="modal-overlay"></div>
+
+        <!-- Panel de Resumen de Validación -->
+        <div id="validationSummary" class="fixed top-0 right-0 w-96 h-screen bg-gray-800 p-6 transform translate-x-full transition-transform duration-300 overflow-y-auto z-50">
+            <button onclick="toggleValidationSummary()" class="absolute top-4 left-4 text-gray-400 hover:text-white">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+            </button>
+            <h2 class="text-xl font-bold mb-4 mt-8 text-white">Resumen de Validación</h2>
+            <div id="validationContent" class="text-white"></div>
+        </div>
+        
+        <!-- Botón para mostrar el resumen -->
+        <button id="showValidationBtn" 
+                class="fixed bottom-4 right-4 bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-full shadow-lg z-50 hidden">
+            Ver Resumen
+        </button>
     </div>
 
     <script>
@@ -321,6 +316,7 @@
 
         async function processExpo(expo_id) {
             try {
+                console.log('1. Iniciando procesamiento de expo:', expo_id);
                 const response = await fetch('/process_expo', {
                     method: 'POST',
                     headers: {
@@ -330,26 +326,24 @@
                 });
                 
                 const data = await response.json();
+                console.log('2. Respuesta de process_expo:', data);
+                
                 if (data.status === 'success') {
                     // Continuar con la carga de imágenes
-                    loadImages(expo_id);
+                    await loadImages(expo_id);
                 } else {
                     console.error('Error procesando la expo:', data.message);
+                    mostrarError(data.message);
                 }
             } catch (error) {
-                console.error('Error:', error);
+                console.error('Error en processExpo:', error);
+                mostrarError('Error al procesar la exposición');
             }
         }
 
         async function loadImages(expo_id) {
-            const loader = document.getElementById('loader');
-            const error = document.getElementById('error');
-            const imageGrid = document.getElementById('imageGrid');
-            
             try {
-                loader.classList.remove('hidden');
-                error.classList.add('hidden');
-                
+                console.log('3. Iniciando carga de imágenes para:', expo_id);
                 const formData = new FormData();
                 formData.append('expo_id', expo_id);
                 
@@ -359,36 +353,44 @@
                 });
                 
                 const data = await response.json();
-                
-                imageGrid.innerHTML = ''; // Limpiar el grid antes de mostrar nuevas imágenes
-                
-                if (data.error) {
-                    error.textContent = data.error;
-                    error.classList.remove('hidden');
-                } else if (data.status === 'show_images') {
-                    // Añadir número de pantalla a cada imagen y ordenar
+                console.log('4. Datos de imágenes recibidos:', data);
+
+                if (data.status === 'show_images' && data.images) {
+                    // **Asignar screenNumber a cada imagen**
                     const imagesWithScreen = data.images.map(image => {
                         const screenMatch = image.filename.match(/P(\d{3})/);
                         const screenNumber = screenMatch ? parseInt(screenMatch[1]) : 999;
                         return { ...image, screenNumber };
                     }).sort((a, b) => a.screenNumber - b.screenNumber);
 
-                    // Mostrar las imágenes directamente sin mostrar el diálogo
-                    imagesWithScreen.forEach(image => {
+                    // Generar el resumen de validación
+                    const validationData = generateValidationSummary(imagesWithScreen);
+                    updateValidationSummary(validationData);
+                    
+                    // Mostrar el botón de resumen
+                    const showValidationBtn = document.getElementById('showValidationBtn');
+                    showValidationBtn.style.display = 'block';
+
+                    // Mostrar las miniaturas en el grid
+                    const imageGrid = document.getElementById('imageGrid');
+                    imageGrid.innerHTML = ''; // Limpiar el grid existente
+
+                    imagesWithScreen.forEach(item => {
                         const div = document.createElement('div');
                         div.className = 'relative bg-gray-800 p-2';
                         
-                        const isHorizontal = image.screenNumber >= 11;
+                        // Determinar si es horizontal basado en el número de pantalla
+                        const isHorizontal = item.screenNumber >= 11;
                         
-                        if (image.is_video) {
+                        if (item.is_video) {
                             div.innerHTML = `
                                 <div class="video-container relative thumbnail-container overflow-hidden ${isHorizontal ? 'landscape' : 'portrait'}">
                                     <div class="absolute top-2 left-2 bg-black bg-opacity-50 px-2 py-1 text-white text-sm z-10">
-                                        ${image.screenNumber}
+                                        ${item.screenNumber}
                                     </div>
                                     <div class="info-icon" 
-                                         data-filename="${image.filename}" 
-                                         onclick="showInfo('${image.filename}', ${JSON.stringify(image).replace(/"/g, '&quot;')})">
+                                         data-filename="${item.filename}" 
+                                         onclick="showInfo('${item.filename}', ${JSON.stringify(item).replace(/"/g, '&quot;')})">
                                         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" 
                                                   d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
@@ -397,7 +399,7 @@
                                     <video 
                                         class="thumbnail-media" 
                                         preload="metadata">
-                                        <source src="/expos/${expo_id}/ficheros_salida/${image.filename}" type="video/mp4">
+                                        <source src="/expos/${expo_id}/ficheros_salida/${item.filename}" type="video/mp4">
                                     </video>
                                     <div class="video-controls absolute bottom-0 left-0 right-0 p-2 flex flex-col gap-1">
                                         <div class="progress rounded-full">
@@ -419,122 +421,6 @@
                             `;
                             
                             // Añadir los event listeners para el video...
-                        } else {
-                            div.innerHTML = `
-                                <div class="thumbnail-container ${isHorizontal ? 'landscape' : 'portrait'}">
-                                    <div class="absolute top-2 left-2 bg-black bg-opacity-50 px-2 py-1 text-white text-sm z-10">
-                                        ${image.screenNumber}
-                                    </div>
-                                    <div class="info-icon" 
-                                         data-filename="${image.filename}" 
-                                         onclick="showInfo('${image.filename}', ${JSON.stringify(image).replace(/"/g, '&quot;')})">
-                                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" 
-                                                  d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
-                                        </svg>
-                                    </div>
-                                    <img 
-                                        src="${image.thumbnail}" 
-                                        class="thumbnail-media" 
-                                        alt="${image.filename}">
-                                </div>
-                            `;
-                        }
-                        
-                        // Solo asignar el gridColumn
-                        div.style.gridColumn = isHorizontal ? 'span 2' : 'span 1';
-                        
-                        imageGrid.appendChild(div);
-                    });
-                }
-            } catch (err) {
-                console.error('Error en loadImages:', err);
-                error.textContent = 'Error al cargar las imágenes';
-                error.classList.remove('hidden');
-            } finally {
-                loader.classList.add('hidden');
-            }
-        }
-
-        document.getElementById('expoForm').addEventListener('submit', async (e) => {
-            e.preventDefault();
-            const expo_id = document.getElementById('expo_id').value;
-            const loader = document.getElementById('loader');
-            const error = document.getElementById('error');
-            const imageGrid = document.getElementById('imageGrid');
-            
-            loader.classList.remove('hidden');
-            error.classList.add('hidden');
-            imageGrid.innerHTML = '';
-
-            try {
-                const formData = new FormData();
-                formData.append('expo_id', expo_id);
-
-                const response = await fetch('/load_images', {
-                    method: 'POST',
-                    body: formData
-                });
-                
-                const data = await response.json();
-                
-                if (data.error) {
-                    error.textContent = data.error;
-                    error.classList.remove('hidden');
-                } else if (data.status === 'show_images') {
-                    // Añadir número de pantalla a cada imagen y ordenar
-                    const imagesWithScreen = data.images.map(image => {
-                        const screenMatch = image.filename.match(/P(\d{3})/);
-                        const screenNumber = screenMatch ? parseInt(screenMatch[1]) : 999; // Si no hay coincidencia, va al final
-                        return { ...image, screenNumber };
-                    }).sort((a, b) => a.screenNumber - b.screenNumber);
-
-                    imagesWithScreen.forEach(image => {
-                        const div = document.createElement('div');
-                        div.className = 'relative bg-gray-800 p-2';
-                        
-                        // Determinar si es horizontal basado en el número de pantalla
-                        const isHorizontal = image.screenNumber >= 11;
-                        
-                        if (image.is_video) {
-                            div.innerHTML = `
-                                <div class="video-container relative thumbnail-container overflow-hidden ${isHorizontal ? 'landscape' : 'portrait'}">
-                                    <div class="absolute top-2 left-2 bg-black bg-opacity-50 px-2 py-1 text-white text-sm z-10">
-                                        ${image.screenNumber}
-                                    </div>
-                                    <div class="info-icon" 
-                                         data-filename="${image.filename}" 
-                                         onclick="showInfo('${image.filename}', ${JSON.stringify(image).replace(/"/g, '&quot;')})">
-                                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" 
-                                                  d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
-                                        </svg>
-                                    </div>
-                                    <video 
-                                        class="thumbnail-media" 
-                                        preload="metadata">
-                                        <source src="/expos/${expo_id}/ficheros_salida/${image.filename}" type="video/mp4">
-                                    </video>
-                                    <div class="video-controls absolute bottom-0 left-0 right-0 p-2 flex flex-col gap-1">
-                                        <div class="progress rounded-full">
-                                            <div class="progress-filled rounded-full"></div>
-                                        </div>
-                                        <div class="flex items-center justify-between">
-                                            <button class="play-pause-btn text-white p-1 rounded hover:bg-black hover:bg-opacity-30">
-                                                <svg class="w-5 h-5 play-icon" fill="currentColor" viewBox="0 0 20 20">
-                                                    <path d="M10 0a10 10 0 100 20 10 10 0 000-20zm4 10.5l-6 3.5V7l6 3.5z"/>
-                                                </svg>
-                                                <svg class="w-5 h-5 pause-icon hidden" fill="currentColor" viewBox="0 0 20 20">
-                                                    <path d="M5 4h3v12H5V4zm7 0h3v12h-3V4z"/>
-                                                </svg>
-                                            </button>
-                                            <span class="time-display text-white text-xs">0:00 / 0:00</span>
-                                        </div>
-                                    </div>
-                                </div>
-                            `;
-
-                            // Añadir los event listeners después de crear el elemento
                             const container = div.querySelector('.video-container');
                             const video = container.querySelector('video');
                             const playPauseBtn = container.querySelector('.play-pause-btn');
@@ -587,20 +473,20 @@
                             div.innerHTML = `
                                 <div class="thumbnail-container ${isHorizontal ? 'landscape' : 'portrait'}">
                                     <div class="absolute top-2 left-2 bg-black bg-opacity-50 px-2 py-1 text-white text-sm z-10">
-                                        ${image.screenNumber}
+                                        ${item.screenNumber}
                                     </div>
                                     <div class="info-icon" 
-                                         data-filename="${image.filename}" 
-                                         onclick="showInfo('${image.filename}', ${JSON.stringify(image).replace(/"/g, '&quot;')})">
+                                         data-filename="${item.filename}" 
+                                         onclick="showInfo('${item.filename}', ${JSON.stringify(item).replace(/"/g, '&quot;')})">
                                         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" 
                                                   d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
                                         </svg>
                                     </div>
                                     <img 
-                                        src="${image.thumbnail}" 
+                                        src="${item.thumbnail}" 
                                         class="thumbnail-media" 
-                                        alt="${image.filename}">
+                                        alt="${item.filename}">
                                 </div>
                             `;
                         }
@@ -630,15 +516,49 @@
                             </button>
                         </div>
                     `;
+                    const imageGrid = document.getElementById('imageGrid');
                     imageGrid.appendChild(div);
                 }
-            } catch (err) {
-                error.textContent = 'Error al cargar las imágenes';
-                error.classList.remove('hidden');
+            } catch (error) {
+                console.error('Error en loadImages:', error);
+                mostrarError('Error al cargar las imágenes');
             } finally {
-                loader.classList.add('hidden');
+                ocultarLoader();
+            }
+        }
+
+        document.getElementById('expoForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            console.log('0. Formulario enviado');
+            const expo_id = document.getElementById('expo_id').value;
+            const loader = document.getElementById('loader');
+            const error = document.getElementById('error');
+            const imageGrid = document.getElementById('imageGrid');
+            
+            loader.classList.remove('hidden');
+            error.classList.add('hidden');
+            imageGrid.innerHTML = '';
+
+            try {
+                await processExpo(expo_id);
+            } catch (err) {
+                console.error('Error general:', err);
+                mostrarError('Error al procesar la exposición');
+            } finally {
+                ocultarLoader();
             }
         });
+
+        function mostrarError(mensaje) {
+            const error = document.getElementById('error');
+            error.textContent = mensaje;
+            error.classList.remove('hidden');
+        }
+
+        function ocultarLoader() {
+            const loader = document.getElementById('loader');
+            loader.classList.add('hidden');
+        }
 
         function cancelUnzip() {
             document.getElementById('imageGrid').innerHTML = '';
@@ -668,18 +588,16 @@
                     // Recargar las imágenes después de procesar
                     loadImages(expo_id);
                 } else {
-                    error.textContent = data.message;
-                    error.classList.remove('hidden');
+                    mostrarError(data.message);
                 }
             } catch (err) {
-                error.textContent = 'Error al procesar los archivos';
-                error.classList.remove('hidden');
+                mostrarError('Error al procesar los archivos');
             } finally {
-                loader.classList.add('hidden');
+                ocultarLoader();
             }
         }
 
-        // Añadir estas nuevas funciones al final del script
+        // Función para mostrar información del archivo
         function showInfo(filename, imageData) {
             try {
                 const modal = document.getElementById('infoModal');
@@ -856,7 +774,15 @@
             }
         }
 
-        // Modificar el event listener para cerrar al hacer clic fuera
+        // Función para cerrar el modal
+        function closeInfoModal() {
+            const modal = document.getElementById('infoModal');
+            const overlay = document.querySelector('.modal-overlay');
+            if (modal) modal.style.display = 'none';
+            if (overlay) overlay.style.display = 'none';
+        }
+
+        // Event listener para cerrar el modal al hacer clic en el overlay
         document.addEventListener('click', function(event) {
             const modal = document.getElementById('infoModal');
             const overlay = document.querySelector('.modal-overlay');
@@ -865,16 +791,223 @@
             }
         });
 
-        function closeInfoModal() {
-            const modal = document.getElementById('infoModal');
-            const overlay = document.querySelector('.modal-overlay');
-            if (modal) modal.style.display = 'none';
-            if (overlay) overlay.style.display = 'none';
-        }
-
+        // Asegurar que el input esté enfocado al cargar la página
         document.addEventListener('DOMContentLoaded', function() {
             document.getElementById('expo_id').focus();
+            
+            // Asegurar que el botón de resumen tenga el event listener
+            const showValidationBtn = document.getElementById('showValidationBtn');
+            if (showValidationBtn) {
+                showValidationBtn.addEventListener('click', function() {
+                    toggleValidationSummary();
+                });
+            }
         });
+
+        // Función para actualizar el resumen de validación
+        function updateValidationSummary(validationData) {
+            console.log('5. Actualizando resumen con:', validationData);
+            
+            const content = document.getElementById('validationContent');
+            if (!content) {
+                console.error('No se encuentra el elemento validationContent');
+                return;
+            }
+
+            let html = '';
+            
+            // Sección de archivos válidos
+            if (validationData.valid.images.length > 0 || validationData.valid.videos.length > 0) {
+                html += '<div class="mb-6"><h3 class="text-lg font-semibold text-green-500 mb-2">Archivos Válidos</h3>';
+                
+                if (validationData.valid.videos.length > 0) {
+                    html += `
+                        <div class="mb-3">
+                            <h4 class="text-white text-sm mb-1">Videos (${validationData.valid.videos.length})</h4>
+                            <ul class="text-sm text-gray-300">
+                                ${validationData.valid.videos.map(vid => `<li>${vid.filename}</li>`).join('')}
+                            </ul>
+                        </div>`;
+                }
+                
+                if (validationData.valid.images.length > 0) {
+                    html += `
+                        <div class="mb-3">
+                            <h4 class="text-white text-sm mb-1">Imágenes (${validationData.valid.images.length})</h4>
+                            <ul class="text-sm text-gray-300">
+                                ${validationData.valid.images.map(img => `<li>${img.filename}</li>`).join('')}
+                            </ul>
+                        </div>`;
+                }
+                html += '</div>';
+            }
+            
+            // Sección de archivos inválidos
+            if (validationData.invalid.images.length > 0 || validationData.invalid.videos.length > 0) {
+                html += '<div class="mb-6"><h3 class="text-lg font-semibold text-red-500 mb-2">Archivos con Problemas</h3>';
+                
+                if (validationData.invalid.images.length > 0) {
+                    html += `
+                        <div class="mb-3">
+                            <h4 class="text-white text-sm mb-1">Imágenes (${validationData.invalid.images.length})</h4>
+                            <ul class="text-sm text-gray-300">
+                                ${validationData.invalid.images.map(img => `
+                                    <li class="mb-2">
+                                        ${img.filename}
+                                        <ul class="ml-4 text-xs text-red-400">
+                                            ${img.issues.map(issue => `<li>• ${issue}</li>`).join('')}
+                                        </ul>
+                                    </li>
+                                `).join('')}
+                            </ul>
+                        </div>`;
+                }
+                
+                if (validationData.invalid.videos.length > 0) {
+                    html += `
+                        <div class="mb-3">
+                            <h4 class="text-white text-sm mb-1">Videos (${validationData.invalid.videos.length})</h4>
+                            <ul class="text-sm text-gray-300">
+                                ${validationData.invalid.videos.map(vid => `
+                                    <li class="mb-2">
+                                        ${vid.filename}
+                                        <ul class="ml-4 text-xs text-red-400">
+                                            ${vid.issues.map(issue => `<li>• ${issue}</li>`).join('')}
+                                        </ul>
+                                    </li>
+                                `).join('')}
+                            </ul>
+                        </div>`;
+                }
+                html += '</div>';
+            }
+
+            console.log('6. HTML generado:', html);
+            content.innerHTML = html;
+        }
+
+        // Función para validar el contenido
+        function validateContent(imageData) {
+            console.log('Validando contenido:', imageData); // Nuevo log
+            const issues = [];
+            const info = imageData.info;
+            
+            if (!info) {
+                console.warn('No hay información para:', imageData.filename);
+                return ['Información no disponible'];
+            }
+            
+            if (imageData.is_video) {
+                // Validación de videos
+                if (info.ANCHO > info.ALTO && 
+                    (info.ANCHO !== VIDEO_HORIZONTAL_DIMENSIONS.width || 
+                     info.ALTO !== VIDEO_HORIZONTAL_DIMENSIONS.height)) {
+                    issues.push(`Dimensiones incorrectas para video horizontal (${info.ANCHO}x${info.ALTO})`);
+                }
+                if (info.ALTO > info.ANCHO && 
+                    (info.ANCHO !== VIDEO_VERTICAL_DIMENSIONS.width || 
+                     info.ALTO !== VIDEO_VERTICAL_DIMENSIONS.height)) {
+                    issues.push(`Dimensiones incorrectas para video vertical (${info.ANCHO}x${info.ALTO})`);
+                }
+                
+                const bitrateInMbps = Math.round(info.TASA_BITS / 1000000);
+                if (bitrateInMbps < VIDEO_MIN_BITRATE || bitrateInMbps > VIDEO_MAX_BITRATE) {
+                    issues.push(`Tasa de bits fuera de rango (${bitrateInMbps} Mbps)`);
+                }
+                
+                if (parseFloat(info.FPS) !== VIDEO_MAX_FPS) {
+                    issues.push(`FPS incorrectos (${info.FPS})`);
+                }
+                
+                if (!VIDEO_ALLOWED_CODECS.includes(info.CÓDEC_VIDEO)) {
+                    issues.push(`Códec no permitido (${info.CÓDEC_VIDEO})`);
+                }
+            } else {
+                // Validación de imágenes
+                if (info.ANCHO > info.ALTO && 
+                    (info.ANCHO !== IMG_HORIZONTAL_DIMENSIONS.width || 
+                     info.ALTO !== IMG_HORIZONTAL_DIMENSIONS.height)) {
+                    issues.push(`Dimensiones incorrectas para imagen horizontal (${info.ANCHO}x${info.ALTO})`);
+                }
+                if (info.ALTO > info.ANCHO && 
+                    (info.ANCHO !== IMG_VERTICAL_DIMENSIONS.width || 
+                     info.ALTO !== IMG_VERTICAL_DIMENSIONS.height)) {
+                    issues.push(`Dimensiones incorrectas para imagen vertical (${info.ANCHO}x${info.ALTO})`);
+                }
+                
+                if (info.RESOLUCION_X !== IMG_REQUIRED_DPI || info.RESOLUCION_Y !== IMG_REQUIRED_DPI) {
+                    issues.push(`DPI incorrectos (${info.RESOLUCION_X}×${info.RESOLUCION_Y})`);
+                }
+            }
+            
+            const sizeInMB = parseFloat(info.TAMAÑO_MB);
+            const maxSize = imageData.is_video ? VIDEO_MAX_FILE_SIZE_MB : IMG_MAX_FILE_SIZE_MB;
+            if (sizeInMB > maxSize) {
+                issues.push(`Tamaño excede el máximo permitido (${sizeInMB.toFixed(2)} MB)`);
+            }
+            
+            console.log('Issues encontrados:', issues); // Nuevo log
+            return issues;
+        }
+
+        // Función para generar el resumen de validación
+        function generateValidationSummary(data) {
+            console.log('Generando resumen para:', data);
+            
+            const validationData = {
+                valid: {
+                    images: [],
+                    videos: []
+                },
+                invalid: {
+                    images: [],
+                    videos: []
+                }
+            };
+            
+            if (!Array.isArray(data)) {
+                console.error('Los datos no son un array:', data);
+                return validationData;
+            }
+            
+            data.forEach(item => {
+                if (!item) {
+                    console.warn('Item inválido encontrado');
+                    return;
+                }
+                
+                const issues = validateContent(item);
+                const target = issues.length === 0 ? 'valid' : 'invalid';
+                const type = item.is_video ? 'videos' : 'images';
+                
+                if (target === 'valid') {
+                    validationData[target][type].push({
+                        filename: item.filename
+                    });
+                } else {
+                    validationData[target][type].push({
+                        filename: item.filename,
+                        issues: issues
+                    });
+                }
+            });
+            
+            console.log('Resumen generado:', validationData);
+            return validationData;
+        }
+
+        // Función para alternar la visibilidad del resumen
+        function toggleValidationSummary() {
+            const summary = document.getElementById('validationSummary');
+            const isHidden = summary.style.transform === 'translateX(100%)' || summary.style.transform === '';
+            summary.style.transform = isHidden ? 'translateX(0)' : 'translateX(100%)';
+        }
+
+        // Event listener para mostrar el resumen
+        document.getElementById('showValidationBtn').addEventListener('click', function() {
+            toggleValidationSummary();
+        });
+
     </script>
 </body>
 </html>
