@@ -222,6 +222,14 @@
         .text-red-500 {
             color: rgb(239, 68, 68);
         }
+
+        #alertButton {
+            margin-left: 10px;
+        }
+        
+        #alertButton i {
+            margin-right: 5px;
+        }
     </style>
 </head>
 <body class="bg-gray-900 text-gray-100 min-h-screen">
@@ -237,10 +245,19 @@
                            placeholder="Ej: E995"
                            autofocus>
                 </div>
-                <button type="submit" 
-                        class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-md transition duration-200">
-                    Cargar Imágenes
-                </button>
+                <div class="flex items-center gap-2">
+                    <button type="submit" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-md">
+                        Cargar Imágenes
+                    </button>
+                    <button type="button" id="alertButton" 
+                            class="hidden px-4 py-2 bg-red-600 hover:bg-red-700 rounded-md flex items-center gap-2">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" 
+                                  d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+                        </svg>
+                        Archivos fuera de rango
+                    </button>
+                </div>
             </form>
         </div>
 
@@ -362,6 +379,9 @@
                         const screenNumber = screenMatch ? parseInt(screenMatch[1]) : 999;
                         return { ...image, screenNumber };
                     }).sort((a, b) => a.screenNumber - b.screenNumber);
+
+                    // Verificar archivos fuera de rango y mostrar el botón si es necesario
+                    checkForOutOfRangeFiles(imagesWithScreen);
 
                     // Generar el resumen de validación
                     const validationData = generateValidationSummary(imagesWithScreen);
@@ -533,11 +553,14 @@
 
         document.getElementById('expoForm').addEventListener('submit', async (e) => {
             e.preventDefault();
-            console.log('0. Formulario enviado');
             const expo_id = document.getElementById('expo_id').value;
             const loader = document.getElementById('loader');
             const error = document.getElementById('error');
             const imageGrid = document.getElementById('imageGrid');
+            const alertButton = document.getElementById('alertButton');
+            
+            // Ocultar el botón de alerta al iniciar una nueva carga
+            alertButton.classList.add('hidden');
             
             loader.classList.remove('hidden');
             error.classList.add('hidden');
@@ -589,7 +612,7 @@
                 const data = await response.json();
                 
                 if (data.status === 'success') {
-                    // Recargar las imágenes después de procesar
+                    // Recargar las im��genes después de procesar
                     loadImages(expo_id);
                 } else {
                     mostrarError(data.message);
@@ -997,6 +1020,61 @@
         // Event listener para mostrar el resumen
         document.getElementById('showValidationBtn').addEventListener('click', function() {
             toggleValidationSummary();
+        });
+
+        function checkForOutOfRangeFiles(files) {
+            console.log('Verificando archivos fuera de rango:', files);
+            const alertButton = document.getElementById('alertButton');
+            let hasOutOfRangeFiles = false;
+
+            for (const file of files) {
+                const info = file.info;
+                if (!info) continue;
+
+                if (file.is_video) {
+                    // Validación para videos
+                    if (info.TAMAÑO_MB > VIDEO_MAX_FILE_SIZE_MB ||
+                        parseFloat(info.FPS) > VIDEO_MAX_FPS ||
+                        (info.TASA_BITS && (info.TASA_BITS < VIDEO_MIN_BITRATE * 1000000 || 
+                                          info.TASA_BITS > VIDEO_MAX_BITRATE * 1000000)) ||
+                        !VIDEO_ALLOWED_CODECS.includes(info.CÓDEC_VIDEO)) {
+                        hasOutOfRangeFiles = true;
+                        console.log('Video fuera de rango:', file.filename);
+                        break;
+                    }
+                } else {
+                    // Validación para imágenes
+                    if (info.TAMAÑO_MB > IMG_MAX_FILE_SIZE_MB ||
+                        !IMG_ALLOWED_FORMATS.includes(info.FORMATO) ||
+                        (info.RESOLUCION_X && info.RESOLUCION_X !== IMG_REQUIRED_DPI) ||
+                        (info.RESOLUCION_Y && info.RESOLUCION_Y !== IMG_REQUIRED_DPI)) {
+                        hasOutOfRangeFiles = true;
+                        console.log('Imagen fuera de rango:', file.filename);
+                        break;
+                    }
+                }
+            }
+
+            console.log('¿Hay archivos fuera de rango?', hasOutOfRangeFiles);
+            
+            // Mostrar u ocultar el botón de alerta
+            if (hasOutOfRangeFiles) {
+                alertButton.classList.remove('hidden');
+                console.log('Mostrando botón de alerta');
+            } else {
+                alertButton.classList.add('hidden');
+                console.log('Ocultando botón de alerta');
+            }
+        }
+
+        // Añadir después de que el DOM esté cargado
+        document.addEventListener('DOMContentLoaded', function() {
+            // Inicializar tooltip de Bootstrap
+            const alertButton = document.getElementById('alertButton');
+            new bootstrap.Tooltip(alertButton, {
+                title: 'Hay archivos que no cumplen con los requisitos técnicos',
+                placement: 'bottom'
+            });
         });
 
     </script>

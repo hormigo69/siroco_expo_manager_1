@@ -80,6 +80,36 @@ def get_images(expo_id):
     except Exception as e:
         return jsonify({'status': 'error', 'message': str(e)}), 500
 
+@app.route('/load_images', methods=['POST'])
+def load_images():
+    try:
+        expo_id = request.form.get('expo_id')
+        output_path = os.path.join(os.getcwd(), 'expos', expo_id, 'ficheros_salida')
+        
+        if not os.path.exists(output_path):
+            return jsonify({'status': 'error', 'message': 'Output folder not found'}), 404
+            
+        files = []
+        for file in os.listdir(output_path):
+            if file.lower().endswith(('.mp4', '.jpg', '.jpeg', '.png')):
+                file_path = os.path.join(output_path, file)
+                file_info = get_file_info(file_path)  # Obtener información detallada del archivo
+                
+                if file_info:
+                    files.append({
+                        'filename': file,
+                        'is_video': file.lower().endswith('.mp4'),
+                        'info': file_info  # Incluir toda la información del archivo
+                    })
+        
+        return jsonify({
+            'status': 'show_images',
+            'images': files
+        })
+        
+    except Exception as e:
+        return jsonify({'status': 'error', 'message': str(e)}), 500
+
 
 
 
