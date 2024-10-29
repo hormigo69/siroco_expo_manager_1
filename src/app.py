@@ -5,6 +5,7 @@ import io
 import base64
 import glob
 from main import ExpoProcessor, ImageInfo, VideoInfo  # Añadir importación de ImageInfo y VideoInfo
+import shutil
 
 app = Flask(__name__)
 
@@ -131,6 +132,7 @@ def process_expo_endpoint():
         
         # Verificar si existe la carpeta ficheros_salida
         output_path = os.path.join(os.getcwd(), 'expos', expo_id, 'ficheros_salida')
+        originales_path = os.path.join(os.getcwd(), 'expos', expo_id, 'originales')
         
         if not os.path.exists(output_path):
             # Si no existe pero hay un zip, procesarlo
@@ -143,7 +145,26 @@ def process_expo_endpoint():
                 processor.setup_directories()
                 processor.unzip_files()
                 processor.process_and_move_files()
-                return jsonify({'status': 'success', 'message': 'Expo processed successfully'})
+                
+                # Copiar contenido a la carpeta 'originales'
+                if not os.path.exists(originales_path):
+                    os.makedirs(originales_path)
+                
+                # Copiar todos los archivos de ficheros_salida a originales
+                for item in os.listdir(output_path):
+                    s = os.path.join(output_path, item)
+                    d = os.path.join(originales_path, item)
+                    if os.path.isfile(s):
+                        shutil.copy2(s, d)
+                    else:
+                        shutil.copytree(s, d, dirs_exist_ok=True)
+                
+                # Borrar la carpeta 'varios' si existe
+                varios_path = os.path.join(output_path, 'varios')
+                if os.path.exists(varios_path):
+                    shutil.rmtree(varios_path)
+                
+                return jsonify({'status': 'success', 'message': 'Expo processed successfully and backed up'})
             else:
                 return jsonify({'status': 'error', 'message': 'No zip file found'}), 404
         
