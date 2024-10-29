@@ -10,3 +10,4 @@ src/__pycache__/
 src/templates/index__.html
 src/templates/index_resumen.html
 .DS_Store
+src/__pycache__/
