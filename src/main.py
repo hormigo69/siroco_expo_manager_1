@@ -115,16 +115,32 @@ class ImageInfo:
         try:
             with Image.open(file_path) as img:
                 width, height = img.size
-                dpi = img.info.get('dpi', (None, None))
+                
+                # Manejo especial de DPI para PNG
+                if img.format == 'PNG':
+                    # Buscar la información de DPI en los metadatos específicos de PNG
+                    dpi = None
+                    if 'dpi' in img.info:
+                        dpi = img.info['dpi']
+                    elif 'pHYs' in img.info:
+                        # pHYs contiene pixels por metro, convertir a DPI
+                        x_density = img.info['pHYs'][0]
+                        y_density = img.info['pHYs'][1]
+                        if x_density > 0 and y_density > 0:
+                            # Convertir de pixels por metro a DPI (1 metro = 39.3701 pulgadas)
+                            dpi = (round(x_density / 39.3701), round(y_density / 39.3701))
+                else:
+                    dpi = img.info.get('dpi', (None, None))
+
+                # Si no se encontró DPI, usar valor por defecto de 72
+                if not dpi or None in dpi:
+                    dpi = (72, 72)
+                
                 img_format = img.format
                 file_size = os.path.getsize(file_path)
-                # Convertir directamente a MB
-                file_size_mb = file_size / (1024 * 1024)  # bytes a MB
+                file_size_mb = file_size / (1024 * 1024)
                 
-                # Determinar orientación
                 orientation = 'H' if width > height else 'V'
-                
-                # ... resto del código de EXIF ...
                 
                 return {
                     'ANCHO': width,
@@ -133,11 +149,11 @@ class ImageInfo:
                     'RESOLUCION_Y': dpi[1],
                     'ORIENTACION': orientation,
                     'FORMATO': img_format,
-                    'TAMAÑO_MB': round(file_size_mb, 2)  # Ahora sí está en MB
+                    'TAMAÑO_MB': round(file_size_mb, 2)
                 }
         except Exception as e:
-                print(f"Error procesando {file_path}: {e}")
-                return None
+            print(f"Error procesando {file_path}: {e}")
+            return None
                 
     @staticmethod
     def get_images_info_from_directory(directory_path):

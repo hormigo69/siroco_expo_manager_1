@@ -236,7 +236,7 @@
 </head>
 <body class="bg-gray-900 text-gray-100 min-h-screen">
     <div class="container mx-auto px-4 py-8">
-        <h1 class="text-4xl font-bold mb-8 text-center">Gestor de Exposiciones</h1>
+        <h1 class="text-4xl font-bold mb-8 text-center">Expo Manager</h1>
         
         <div class="max-w-md mx-auto mb-8">
             <form id="expoForm" class="bg-gray-800 rounded-lg p-6 shadow-lg">
@@ -294,7 +294,7 @@
         <!-- Botón para mostrar el resumen -->
         <button id="showValidationBtn" 
                 class="fixed bottom-4 right-4 bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-full shadow-lg z-50 hidden">
-            Ver Resumen
+            Ver resumen
         </button>
     </div>
 
@@ -949,12 +949,12 @@
                 if (info.RESOLUCION_X !== IMG_REQUIRED_DPI || info.RESOLUCION_Y !== IMG_REQUIRED_DPI) {
                     issues.push(`DPI incorrectos (${info.RESOLUCION_X}×${info.RESOLUCION_Y})`);
                 }
-            }
-            
-            const sizeInMB = parseFloat(info.TAMAÑO_MB);
-            const maxSize = imageData.is_video ? VIDEO_MAX_FILE_SIZE_MB : IMG_MAX_FILE_SIZE_MB;
-            if (sizeInMB > maxSize) {
-                issues.push(`Tamaño excede el máximo permitido (${sizeInMB.toFixed(2)} MB)`);
+
+                // Validación del tamaño para imágenes (entre 1 MB y 10 MB)
+                const sizeInMB = parseFloat(info.TAMAÑO_MB);
+                if (sizeInMB < 1 || sizeInMB > 10) {
+                    issues.push(`Tamaño fuera del rango permitido (${sizeInMB.toFixed(2)} MB)`);
+                }
             }
             
             console.log('Issues encontrados:', issues); // Nuevo log
@@ -1041,7 +1041,8 @@
                     }
                 } else {
                     // Validación para imágenes
-                    if (info.TAMAÑO_MB > IMG_MAX_FILE_SIZE_MB ||
+                    const sizeInMB = parseFloat(info.TAMAÑO_MB);
+                    if (sizeInMB < 1 || sizeInMB > 10 ||  // Validación del rango de tamaño
                         !IMG_ALLOWED_FORMATS.includes(info.FORMATO) ||
                         (info.RESOLUCION_X && info.RESOLUCION_X !== IMG_REQUIRED_DPI) ||
                         (info.RESOLUCION_Y && info.RESOLUCION_Y !== IMG_REQUIRED_DPI)) {
