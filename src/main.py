@@ -18,102 +18,6 @@ from openpyxl.worksheet.table import Table, TableStyleInfo
 #activar el entorno virtual
 #source venv/bin/activate   
 
-# Añadir imports de Flask
-from flask import Flask, jsonify, request
-
-# Inicializar Flask
-app = Flask(__name__)
-
-# Añadir los nuevos endpoints
-@app.route('/process_expo', methods=['POST'])
-def process_expo_endpoint():
-    try:
-        data = request.json
-        expo_id = data.get('expo_id')
-        
-        if not expo_id:
-            return jsonify({'status': 'error', 'message': 'No expo_id provided'}), 400
-        
-        # Verificar si existe la carpeta ficheros_salida
-        output_path = os.path.join(os.getcwd(), 'expos', expo_id, 'ficheros_salida')
-        
-        if not os.path.exists(output_path):
-            # Si no existe pero hay un zip, procesarlo
-            processor = ExpoProcessor(expo_id)
-            
-            # Verificar si existe algún archivo zip
-            zip_files = glob.glob(os.path.join(processor.full_output_path, "*.zip"))
-            
-            if zip_files:
-                processor.setup_directories()
-                processor.unzip_files()
-                processor.process_and_move_files()
-                return jsonify({'status': 'success', 'message': 'Expo processed successfully'})
-            else:
-                return jsonify({'status': 'error', 'message': 'No zip file found'}), 404
-        
-        return jsonify({'status': 'success', 'message': 'Output folder already exists'})
-        
-    except Exception as e:
-        return jsonify({'status': 'error', 'message': str(e)}), 500
-
-@app.route('/get_images/<expo_id>')
-def get_images(expo_id):
-    try:
-        output_path = os.path.join(os.getcwd(), 'expos', expo_id, 'ficheros_salida')
-        if not os.path.exists(output_path):
-            return jsonify({'status': 'error', 'message': 'Output folder not found'}), 404
-            
-        files = []
-        for file in os.listdir(output_path):
-            if file.lower().endswith(('.mp4', '.jpg', '.jpeg', '.png')):
-                files.append({
-                    'filename': file,
-                    'is_video': file.lower().endswith('.mp4')
-                })
-        
-        return jsonify({
-            'status': 'show_images',
-            'images': files
-        })
-        
-    except Exception as e:
-        return jsonify({'status': 'error', 'message': str(e)}), 500
-
-@app.route('/load_images', methods=['POST'])
-def load_images():
-    try:
-        expo_id = request.form.get('expo_id')
-        output_path = os.path.join(os.getcwd(), 'expos', expo_id, 'ficheros_salida')
-        
-        if not os.path.exists(output_path):
-            return jsonify({'status': 'error', 'message': 'Output folder not found'}), 404
-            
-        files = []
-        for file in os.listdir(output_path):
-            if file.lower().endswith(('.mp4', '.jpg', '.jpeg', '.png')):
-                file_path = os.path.join(output_path, file)
-                file_info = get_file_info(file_path)  # Obtener información detallada del archivo
-                
-                if file_info:
-                    files.append({
-                        'filename': file,
-                        'is_video': file.lower().endswith('.mp4'),
-                        'info': file_info  # Incluir toda la información del archivo
-                    })
-        
-        return jsonify({
-            'status': 'show_images',
-            'images': files
-        })
-        
-    except Exception as e:
-        return jsonify({'status': 'error', 'message': str(e)}), 500
-
-
-
-
-
 
 class FileManager:
     @staticmethod
@@ -144,7 +48,7 @@ class FileManager:
                     # Mantener la estructura de carpetas interna
                     target_path = os.path.join(obras_path, file_info.filename)
                     
-                    # Saltar directorios vacíos
+                    # Saltar directorios vacos
                     if file_info.filename.endswith('/'):
                         continue
 
@@ -208,34 +112,19 @@ class FileManager:
 class ImageInfo:
     @staticmethod
     def get_image_info(file_path):
-        '''
-        Obtiene la información de una imagen individual.
-        '''
         try:
             with Image.open(file_path) as img:
                 width, height = img.size
                 dpi = img.info.get('dpi', (None, None))
                 img_format = img.format
                 file_size = os.path.getsize(file_path)
-                #convierte a KB
-                file_size_kb = file_size / 1024
-                #convierte a MB
-                #file_size_mb = file_size / (1024 * 1024)  # Convertir a MB
+                # Convertir directamente a MB
+                file_size_mb = file_size / (1024 * 1024)  # bytes a MB
                 
                 # Determinar orientación
                 orientation = 'H' if width > height else 'V'
                 
-                # Intentar obtener DPI desde los metadatos EXIF si no está disponible
-                if (dpi[0] is None or dpi[1] is None) and hasattr(img, '_getexif'):
-                    exif = img._getexif()
-                    if exif:
-                        for tag_id, value in exif.items():
-                            tag = ExifTags.TAGS.get(tag_id, tag_id)
-                            if tag == 'XResolution':
-                                dpi_x = value[0] / value[1] if isinstance(value, tuple) else value
-                            elif tag == 'YResolution':
-                                dpi_y = value[0] / value[1] if isinstance(value, tuple) else value
-                        dpi = (dpi_x, dpi_y)
+                # ... resto del código de EXIF ...
                 
                 return {
                     'ANCHO': width,
@@ -244,12 +133,12 @@ class ImageInfo:
                     'RESOLUCION_Y': dpi[1],
                     'ORIENTACION': orientation,
                     'FORMATO': img_format,
-                    'TAMAÑO_MB': round(file_size_kb, 2)  # Redondear a 2 decimales
+                    'TAMAÑO_MB': round(file_size_mb, 2)  # Ahora sí está en MB
                 }
         except Exception as e:
-            print(f"Error procesando {file_path}: {e}")
-            return None
-
+                print(f"Error procesando {file_path}: {e}")
+                return None
+                
     @staticmethod
     def get_images_info_from_directory(directory_path):
         '''
@@ -478,13 +367,12 @@ class Recodificador:
             os.makedirs(self.carpeta_destino)
             print(f"Carpeta '{self.carpeta_destino}' creada.")
         else:
-            # Verificar si la carpeta tiene contenido
-            if os.listdir(self.carpeta_destino):
-                respuesta = input("La carpeta 'procesados' ya existe y contiene archivos. ¿Desea volver a procesar los archivos? (s/n): ")
-                if respuesta.lower() != 's':
-                    print("Saltando el proceso de recodificación...")
-                    return False
-            print(f"La carpeta '{self.carpeta_destino}' ya existe.")
+            # Si la carpeta existe, limpiarla
+            for archivo in os.listdir(self.carpeta_destino):
+                ruta_archivo = os.path.join(self.carpeta_destino, archivo)
+                if os.path.isfile(ruta_archivo):
+                    os.remove(ruta_archivo)
+            print(f"Carpeta '{self.carpeta_destino}' limpiada para nuevo procesamiento.")
         return True
 
     def procesar_archivos(self):
@@ -512,32 +400,67 @@ class Recodificador:
                     ancho, alto = img.size
                     formato = img.format
                     modo = img.mode
+                    tamano = os.path.getsize(ruta_archivo)
+                    tamano_kb = tamano / 1024
 
                     necesita_procesamiento = False
+                    razones = []
 
-                    if formato not in ['PNG', 'JPEG'] or modo != 'RGB':
+                    # Verificar resolución (debe ser exactamente 2160x3840 o 3840x2160)
+                    if (ancho, alto) not in [(2160, 3840), (3840, 2160)]:
                         necesita_procesamiento = True
+                        razones.append(f"Resolución incorrecta: {ancho}x{alto}")
+
+                    # Verificar formato y modo
+                    if formato not in ['JPEG', 'JPG', 'PNG']:
+                        necesita_procesamiento = True
+                        razones.append(f"Formato incorrecto: {formato}")
+                    if modo != 'RGB':
+                        necesita_procesamiento = True
+                        razones.append(f"Modo de color incorrecto: {modo}")
+
+                    # Verificar tamaño (más de 10MB sería excesivo para estas resoluciones)
+                    if tamano_kb > 10 * 1024:  # más de 10MB
+                        necesita_procesamiento = True
+                        razones.append(f"Tamaño excesivo: {tamano_kb:.2f}KB")
 
                     if necesita_procesamiento:
-                        if img.mode != 'RGB':
-                            img = img.convert('RGB')
+                        print(f"Procesando {nombre_archivo} por: {', '.join(razones)}")
+                        img_procesada = img.convert('RGB')
+                        
+                        # Ajustar resolución si es necesario
+                        if (ancho, alto) not in [(2160, 3840), (3840, 2160)]:
+                            if ancho > alto:
+                                nuevo_ancho, nuevo_alto = 3840, 2160
+                            else:
+                                nuevo_ancho, nuevo_alto = 2160, 3840
+                            img_procesada = img_procesada.resize((nuevo_ancho, nuevo_alto), Image.Resampling.LANCZOS)
 
-                        nuevo_nombre = os.path.splitext(os.path.basename(ruta_archivo))[0] + '_procesado.jpg'
+                        nuevo_nombre = os.path.splitext(nombre_archivo)[0] + '_procesado.jpg'
                         ruta_destino = os.path.join(self.carpeta_destino, nuevo_nombre)
-                        img.save(ruta_destino, 'JPEG', quality=95)
-                        print(f"Imagen procesada: {nuevo_nombre}")
+                        img_procesada.save(ruta_destino, 'JPEG', 
+                                         quality=85,  # Alta calidad pero no máxima
+                                         optimize=True,  # Optimizar el encoding
+                                         dpi=(72, 72),  # Establecer DPI a 72
+                                         progressive=True)  # Hacer la imagen progresiva
                     else:
-                        nuevo_nombre = os.path.basename(ruta_archivo)
+                        print(f"No se procesa {nombre_archivo}: cumple todos los criterios")
+                        print(f"- Formato: {formato}")
+                        print(f"- Modo: {modo}")
+                        print(f"- Resolución: {ancho}x{alto}")
+                        print(f"- Tamaño: {tamano_kb:.2f}KB")
+                        nuevo_nombre = nombre_archivo
                         ruta_destino = os.path.join(self.carpeta_destino, nuevo_nombre)
                         shutil.copy2(ruta_archivo, ruta_destino)
-                        print(f" Imagen copiada sin procesar: {nuevo_nombre}")
 
-                time.sleep(0.1)  # Simulación de procesamiento
+                time.sleep(0.1)
                 pbar.update(1)
-            except Exception as e:
-                print(f"Error al procesar la imagen {os.path.basename(ruta_archivo)}: {str(e)}")
-            return nombre_archivo
+                return nuevo_nombre
 
+            except Exception as e:
+                print(f"Error al procesar la imagen {nombre_archivo}: {str(e)}")
+                return nombre_archivo
+            
     def procesar_video(self, ruta_archivo):
         try:
             nombre_archivo = os.path.basename(ruta_archivo)
@@ -756,6 +679,6 @@ def main():
     recodificador.actualizar_excel()
 
 if __name__ == "__main__":
-    app.run(debug=True)
+    app.run(debug=True, port=5000)
     # El resto del código main() se ejecutará si se llama directamente
     main()

@@ -1,14 +1,23 @@
-from flask import Flask, render_template, request, jsonify, send_from_directory
+# Imports
+from flask import Flask, render_template, request, jsonify, send_from_directory, url_for
+from flask_cors import CORS
 import os
 from PIL import Image
 import io
 import base64
 import glob
-from main import ExpoProcessor, ImageInfo, VideoInfo  # Añadir importación de ImageInfo y VideoInfo
 import shutil
+from main import ExpoProcessor, ImageInfo, VideoInfo, Recodificador
 
-app = Flask(__name__)
+# Inicialización de Flask
+print("Iniciando configuración de Flask...")
+app = Flask(__name__, template_folder='templates')
+CORS(app)
 
+print("Rutas registradas:")
+print(app.url_map)
+
+# Funciones auxiliares
 def get_thumbnail(image_path, size=(200, 200)):
     try:
         with Image.open(image_path) as img:
@@ -23,10 +32,11 @@ def get_thumbnail(image_path, size=(200, 200)):
 
 def convert_to_serializable(obj):
     """Convierte objetos no serializables a tipos básicos de Python."""
-    if hasattr(obj, 'numerator') and hasattr(obj, 'denominator'):  # Para IFDRational
+    if hasattr(obj, 'numerator') and hasattr(obj, 'denominator'):
         return float(obj.numerator) / float(obj.denominator)
     return str(obj)
 
+# Rutas de la aplicación
 @app.route('/')
 def index():
     return render_template('index.html')
@@ -173,5 +183,75 @@ def process_expo_endpoint():
     except Exception as e:
         return jsonify({'status': 'error', 'message': str(e)}), 500
 
+@app.route('/get_images/<expo_id>')
+def get_images(expo_id):
+    try:
+        output_path = os.path.join(os.getcwd(), 'expos', expo_id, 'ficheros_salida')
+        if not os.path.exists(output_path):
+            return jsonify({'status': 'error', 'message': 'Output folder not found'}), 404
+            
+        files = []
+        for file in os.listdir(output_path):
+            if file.lower().endswith(('.mp4', '.jpg', '.jpeg', '.png')):
+                files.append({
+                    'filename': file,
+                    'is_video': file.lower().endswith('.mp4')
+                })
+        
+        return jsonify({
+            'status': 'show_images',
+            'images': files
+        })
+        
+    except Exception as e:
+        return jsonify({'status': 'error', 'message': str(e)}), 500
+
+@app.route('/recodificar', methods=['POST'])
+def recodificar_endpoint():
+    try:
+        print("Recibida petición de recodificación")
+        data = request.json
+        print(f"Datos recibidos: {data}")
+        
+        if not data:
+            return jsonify({'status': 'error', 'message': 'No se recibieron datos'}), 400
+            
+        expo_id = data.get('expo_id')
+        if not expo_id:
+            return jsonify({'status': 'error', 'message': 'No expo_id provided'}), 400
+        
+        print(f"Procesando expo_id: {expo_id}")
+        
+        # Crear instancia del recodificador
+        recodificador = Recodificador(expo_id)
+        
+        # Procesar archivos
+        print("Creando carpeta procesados...")
+        recodificador.crear_carpeta_procesados()
+        
+        print("Iniciando procesamiento de archivos...")
+        recodificador.procesar_archivos()
+        
+        print("Procesamiento completado")
+        
+        # Verificar contenido de la carpeta procesados
+        carpeta_procesados = os.path.join(os.getcwd(), 'expos', expo_id, 'procesados')
+        if os.path.exists(carpeta_procesados):
+            archivos_procesados = os.listdir(carpeta_procesados)
+            print(f"Archivos en carpeta procesados: {archivos_procesados}")
+        else:
+            print("La carpeta procesados no existe!")
+        
+        return jsonify({
+            'status': 'success', 
+            'message': 'Archivos recodificados correctamente',
+            'archivos_procesados': archivos_procesados if 'archivos_procesados' in locals() else []
+        })
+        
+    except Exception as e:
+        print(f"Error en recodificar_endpoint: {str(e)}")
+        return jsonify({'status': 'error', 'message': str(e)}), 500
+
+# Iniciar la aplicación
 if __name__ == '__main__':
     app.run(debug=True)
