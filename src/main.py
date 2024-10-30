@@ -210,15 +210,13 @@ class VideoInfo:
             if video_stream:
                 width = int(video_stream['width'])
                 height = int(video_stream['height'])
-                re
                 orientation = 'H' if width > height else 'V'
-                frame_rate = eval(video_stream['r_frame_rate'])
+                # Redondear los FPS a un decimal
+                frame_rate = round(float(eval(video_stream['r_frame_rate'])), 1)
                 duration = float(probe['format']['duration'])
-                #duración en segundos
                 duration_seconds = int(duration)
                 bit_rate = int(probe['format']['bit_rate'])
                 video_codec = video_stream['codec_name']
-                # Extraer el formato basado en la extensión del archivo
                 file_extension = os.path.splitext(file_path)[1][1:].lower()
 
                 file_size = os.path.getsize(file_path)
@@ -229,8 +227,7 @@ class VideoInfo:
                     'ALTO': height,
                     'ORIENTACION': orientation,
                     'DURACION_SEG': duration_seconds,
-                    'FPS': frame_rate,
-                    #'FORMATO': probe['format']['format_name'],
+                    'FPS': frame_rate,  # Ahora frame_rate ya está redondeado
                     'FORMATO': file_extension,
                     'TAMAÑO_MB': round(file_size_mb, 2),
                     'TASA_BITS': bit_rate,

@@ -318,8 +318,21 @@
         const IMG_REQUIRED_DPI = 72;
 
         // Constantes de validación para vídeos
-        const VIDEO_MAX_FILE_SIZE_MB = 500;  // Cambiado a 500MB
-        const VIDEO_ALLOWED_FORMAT = ['video/mp4', 'mp4', 'MP4'];  // Añadimos las variantes
+        const VIDEO_MAX_FILE_SIZE_MB = 500;  // Este será ahora el máximo absoluto
+        const VIDEO_ALLOWED_FORMAT = ['video/mp4', 'mp4', 'MP4'];
+
+        // Nuevas constantes para tamaños de video
+        const VIDEO_SIZE_PER_MINUTE = {
+            'H.265': {
+                '30': 225,  // 225 MB por minuto a 30 Mbps
+                '60': 450   // 450 MB por minuto a 60 Mbps
+            },
+            'H.264': {
+                '30': 337.5,  // 337.5 MB por minuto a 30 Mbps
+                '60': 675     // 675 MB por minuto a 60 Mbps
+            }
+        };
+
         const VIDEO_VERTICAL_DIMENSIONS = {
             width: 2160,
             height: 3840
@@ -630,7 +643,6 @@
         function showInfo(filename, imageData) {
             try {
                 const modal = document.getElementById('infoModal');
-                // Mostrar el overlay
                 const overlay = document.querySelector('.modal-overlay');
                 overlay.style.display = 'block';
                 modal.style.display = 'block';
@@ -643,27 +655,36 @@
                             return value === ideal;
                         case 'size':
                             if (imageData.is_video) {
-                                // Para videos, solo verificar límite superior
-                                const valueNum = parseFloat(value.split(' ')[0]);
-                                const idealNum = parseFloat(ideal.split(' ')[0]);
-                                return valueNum <= idealNum;
+                                const valueNum = parseFloat(value);
+                                const duration = imageData.info.DURACION_SEG / 60; // Convertir a minutos
+                                const codec = imageData.info.CÓDEC_VIDEO.startsWith('H.265') ? 'H.265' : 'H.264';
+                                const bitrate = Math.round(imageData.info.TASA_BITS / 1000000);
+                                const bitrateKey = bitrate <= 45 ? '30' : '60';
+                                
+                                const expectedSize = VIDEO_SIZE_PER_MINUTE[codec][bitrateKey] * duration;
+                                const maxSize = expectedSize * 1.2;
+                                
+                                // Solo marcar en rojo si excede el máximo
+                                return valueNum <= maxSize;
                             } else {
-                                // Para imágenes, verificar rango entre 1 y 10 MB
-                                const valueNum = parseFloat(value.split(' ')[0]);
+                                const valueNum = parseFloat(value);
                                 return valueNum >= 1 && valueNum <= 10;
                             }
                         case 'fps':
-                            // Mostrar en rojo si no es exactamente 30 FPS
                             return parseFloat(value) === parseFloat(ideal);
                         case 'bitrate':
                             const [min, max] = ideal.split('-').map(v => parseFloat(v));
                             const current = parseFloat(value);
                             return current >= min && current <= max;
                         case 'format':
-                            return ideal.includes(value);
+                            if (imageData.is_video) {
+                                // Convertir ambos a minúsculas para la comparación
+                                return VIDEO_ALLOWED_FORMAT.map(f => f.toLowerCase())
+                                    .includes(value.toLowerCase());
+                            } else {
+                                return IMG_ALLOWED_FORMATS.includes(value);
+                            }
                         case 'codec':
-                            console.log('Valor a validar:', value);
-                            console.log('Codecs permitidos:', VIDEO_ALLOWED_CODECS);
                             return VIDEO_ALLOWED_CODECS.includes(value);
                         case 'dpi':
                             if (value === 'N/A') return false;
@@ -674,15 +695,7 @@
                 };
 
                 const createInfoRow = (label, value, idealValue = null, type = null) => {
-                    const isValid = !idealValue || (
-                        type === 'codec' ? VIDEO_ALLOWED_CODECS.includes(value) :
-                        type === 'format' ? (
-                            imageData.is_video ? 
-                            VIDEO_ALLOWED_FORMAT.includes(value) : 
-                            IMG_ALLOWED_FORMATS.includes(value)
-                        ) :
-                        isInRange(value, idealValue, type)
-                    );
+                    const isValid = !idealValue || isInRange(value, idealValue, type);
                     
                     return `
                         <div class="info-row">
@@ -693,37 +706,6 @@
                             </div>
                         </div>
                     `;
-                };
-
-                // Función para simplificar la presentación de formatos
-                const formatDisplayNames = {
-                    'image/png': 'PNG',
-                    'image/jpeg': 'JPEG',
-                    'image/jpg': 'JPG',
-                    'image/JPEG': 'JPEG',
-                    'image/JPG': 'JPG',
-                    'video/mp4': 'MP4',
-                    'H.265': 'H.264/AVC',
-                    'H.264': 'H.264/AVC',
-                    'h264': 'H.264/AVC',
-                    'h265': 'H.265/HEVC'
-                };
-
-                const getDisplayFormat = (format, type) => {
-                    if (type === 'format') {
-                        if (Array.isArray(format)) {
-                            // Filtrar solo los formatos en mayúsculas
-                            const uniqueFormats = format.filter(f => 
-                                f === f.toUpperCase() && !f.includes('image/') && !f.includes('video/')
-                            );
-                            return [...new Set(uniqueFormats)].join(', ');
-                        }
-                        return format;
-                    }
-                    if (type === 'codec') {
-                        return 'H.265/HEVC o H.264/AVC';
-                    }
-                    return format;
                 };
 
                 if (imageData && imageData.info) {
@@ -737,9 +719,7 @@
 
                     // Formatear el tamaño del archivo
                     const tamaño = parseFloat(info.TAMAÑO_MB).toFixed(2);
-                    const unidad = 'MB';
-
-                    const maxSize = imageData.is_video ? `${VIDEO_MAX_FILE_SIZE_MB} MB` : `entre 1 MB y 10 MB`;
+                    
                     const idealDimensions = imageData.is_video ? 
                         (info.ALTO > info.ANCHO ? 
                             `${VIDEO_VERTICAL_DIMENSIONS.width}×${VIDEO_VERTICAL_DIMENSIONS.height}` : 
@@ -748,37 +728,36 @@
                             `${IMG_VERTICAL_DIMENSIONS.width}×${IMG_VERTICAL_DIMENSIONS.height}` : 
                             `${IMG_HORIZONTAL_DIMENSIONS.width}×${IMG_HORIZONTAL_DIMENSIONS.height}`);
 
-                    // Formatear la resolución
-                    let resolucion = 'N/A';
-                    if (info.RESOLUCION_X && info.RESOLUCION_Y) {
-                        if (info.RESOLUCION_X === info.RESOLUCION_Y) {
-                            resolucion = `${info.RESOLUCION_X}`;
-                        } else {
-                            resolucion = `${info.RESOLUCION_X}×${info.RESOLUCION_Y}`;
-                        }
-                    }
-
                     infoHtml = `
                         ${createInfoRow('Dimensiones', `${info.ANCHO}×${info.ALTO}`, idealDimensions, 'dimensions')}
-                        ${!imageData.is_video ? createInfoRow('Resolución', `${resolucion} DPI`, `${IMG_REQUIRED_DPI} DPI`, 'dpi') : ''}
+                        ${!imageData.is_video ? createInfoRow('Resolución', `${info.RESOLUCION_X}×${info.RESOLUCION_Y} DPI`, `${IMG_REQUIRED_DPI} DPI`, 'dpi') : ''}
                         ${createInfoRow('Formato', info.FORMATO, 
-                            getDisplayFormat(imageData.is_video ? VIDEO_ALLOWED_FORMAT : IMG_ALLOWED_FORMATS, 'format'), 
+                            imageData.is_video ? 'MP4' : 'PNG, JPEG, JPG', 
                             'format')}
-                        ${createInfoRow('Tamaño', `${tamaño} ${unidad}`, maxSize, 'size')}
                     `;
 
                     if (imageData.is_video) {
+                        const duration = info.DURACION_SEG / 60;
+                        const codec = info.CÓDEC_VIDEO.startsWith('H.265') ? 'H.265' : 'H.264';
+                        const bitrate = Math.round(info.TASA_BITS / 1000000);
+                        const bitrateKey = bitrate <= 45 ? '30' : '60';
+                        const expectedSize = VIDEO_SIZE_PER_MINUTE[codec][bitrateKey] * duration;
+                        const minSize = Math.round(expectedSize * 0.8);
+                        const maxSize = Math.round(expectedSize * 1.2);
+                        const tamaño = Math.round(parseFloat(info.TAMAÑO_MB));
+                        // Redondear los FPS a 1 decimal
+                        const fps = parseFloat(info.FPS).toFixed(1);
+
                         infoHtml += `
                             ${createInfoRow('Duración', `${info.DURACION_SEG} segundos`)}
-                            ${createInfoRow('FPS', info.FPS, `${VIDEO_MAX_FPS}`, 'fps')}
-                            ${createInfoRow('Códec', info.CÓDEC_VIDEO, 
-                                getDisplayFormat(VIDEO_ALLOWED_CODECS, 'codec'), 
-                                'codec')}
-                            ${createInfoRow('Tasa de bits', 
-                                `${Math.round(info.TASA_BITS / 1000000)} Mbps`, 
-                                `${VIDEO_MIN_BITRATE}-${VIDEO_MAX_BITRATE} Mbps`, 
-                                'bitrate')}
+                            ${createInfoRow('FPS', fps, `${VIDEO_MAX_FPS}`, 'fps')}
+                            ${createInfoRow('Códec', info.CÓDEC_VIDEO, 'H.265/HEVC o H.264/AVC', 'codec')}
+                            ${createInfoRow('Tasa de bits', `${Math.round(info.TASA_BITS / 1000000)} Mbps`, 
+                                `${VIDEO_MIN_BITRATE}-${VIDEO_MAX_BITRATE} Mbps`, 'bitrate')}
+                            ${createInfoRow('Tamaño', `${tamaño} MB`, `${minSize}-${maxSize} MB`, 'size')}
                         `;
+                    } else {
+                        infoHtml += createInfoRow('Tamaño', `${tamaño} MB`, 'entre 1 MB y 10 MB', 'size');
                     }
                 } else {
                     infoHtml = `<div class="info-row">No hay información disponible</div>`;
@@ -899,7 +878,7 @@
 
         // Función para validar el contenido
         function validateContent(imageData) {
-            console.log('Validando contenido:', imageData); // Nuevo log
+            console.log('Validando contenido:', imageData);
             const issues = [];
             const info = imageData.info;
             
@@ -926,8 +905,10 @@
                     issues.push(`Tasa de bits fuera de rango (${bitrateInMbps} Mbps)`);
                 }
                 
+                // Redondear los FPS a un decimal en el mensaje de error
+                const fps = parseFloat(info.FPS).toFixed(1);
                 if (parseFloat(info.FPS) !== VIDEO_MAX_FPS) {
-                    issues.push(`FPS incorrectos (${info.FPS})`);
+                    issues.push(`FPS incorrectos (${fps})`);
                 }
                 
                 if (!VIDEO_ALLOWED_CODECS.includes(info.CÓDEC_VIDEO)) {
