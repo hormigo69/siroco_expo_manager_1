@@ -195,17 +195,20 @@ A 60 Mbps: aproximadamente 675 MB por minuto.
 
 29/10 19h
 Falta:
-- Recodificar los vídeos y comprobar que funcionan bien
-   [ ] Comprobar que recodifica bien los archivos
-      [ ] dimensiones
-      [ ] fps
-      [ ] codec
-      [ ] tamaño
-- calcular el tamaño correcto de los archivos teniendo en cuenta el codec y los segundos de duración
+[x] Recodificar los vídeos y comprobar que funcionan bien
+   [x] Comprobar que recodifica bien los archivos
+      [x] dimensiones
+      [x] fps
+      [x] codec
+      [x] tamaño
+[x] calcular el tamaño correcto de los archivos teniendo en cuenta el codec y los segundos de duración
 
-- Mover los archivos de procesados a ficheros, salida
-- Recargar el Front para que se vean los archivos y los datos después de procesar
-- Añadir una barra de proceso mientras se decodifica los archivos
+[ ] Mover los archivos de procesados a ficheros, salida
+[ ] Recargar el Front para que se vean los archivos y los datos después de procesar
+[ ] Añadir una barra de proceso mientras se decodifica los archivos
 
 
-- faltan tb algunos arreglos en el Front, como poner el logotipo, hacer que el botón de cargar imágenes solo se vea cuando el foco esté en el input, añadir un botón que nos abra el Finder en la carpeta con los archivos procesados. Etc.
+- faltan tb algunos arreglos en el Front, como 
+[x] poner el logotipo
+[x] hacer que el botón de cargar imágenes solo se vea cuando el foco esté en el input
+[x] añadir un botón que nos abra el Finder en la carpeta con los archivos procesados. 
