@@ -1,5 +1,5 @@
 # Imports
-from flask import Flask, render_template, request, jsonify, send_from_directory, url_for
+from flask import Flask, render_template, request, jsonify, send_from_directory, url_for, Response
 from flask_cors import CORS
 import os
 from PIL import Image
@@ -8,6 +8,11 @@ import base64
 import glob
 import shutil
 from main import ExpoProcessor, ImageInfo, VideoInfo, Recodificador
+import json
+from concurrent.futures import ThreadPoolExecutor, as_completed
+import threading
+from multiprocessing import Manager, Pool
+import time
 
 # Inicialización de Flask
 print("Iniciando configuración de Flask...")
@@ -211,47 +216,81 @@ def recodificar_endpoint():
     try:
         print("Recibida petición de recodificación")
         data = request.json
-        print(f"Datos recibidos: {data}")
-        
-        if not data:
-            return jsonify({'status': 'error', 'message': 'No se recibieron datos'}), 400
-            
         expo_id = data.get('expo_id')
+        
         if not expo_id:
-            return jsonify({'status': 'error', 'message': 'No expo_id provided'}), 400
-        
-        print(f"Procesando expo_id: {expo_id}")
-        
-        # Crear instancia del recodificador
+            return jsonify({'error': 'No se proporcionó ID de exposición'}), 400
+            
         recodificador = Recodificador(expo_id)
         
-        # Procesar archivos
-        print("Creando carpeta procesados...")
-        recodificador.crear_carpeta_procesados()
-        
-        print("Iniciando procesamiento de archivos...")
-        recodificador.procesar_archivos()
-        
-        print("Procesamiento completado")
-        
-        # Verificar contenido de la carpeta procesados
-        carpeta_procesados = os.path.join(os.getcwd(), 'expos', expo_id, 'procesados')
-        if os.path.exists(carpeta_procesados):
-            archivos_procesados = os.listdir(carpeta_procesados)
-            print(f"Archivos en carpeta procesados: {archivos_procesados}")
-        else:
-            print("La carpeta procesados no existe!")
-        
-        return jsonify({
-            'status': 'success', 
-            'message': 'Archivos recodificados correctamente',
-            'archivos_procesados': archivos_procesados if 'archivos_procesados' in locals() else []
-        })
+        def generate():
+            try:
+                recodificador.crear_carpeta_procesados()
+                files_to_process = []
+                
+                # Obtener lista de archivos
+                for root, _, files in os.walk(recodificador.carpeta_origen):
+                    for file in files:
+                        if file.lower().endswith(('.mp4', '.jpg', '.jpeg', '.png')):
+                            file_path = os.path.join(root, file)
+                            files_to_process.append(file_path)
+
+                total_files = len(files_to_process)
+                print(f"Total archivos a procesar: {total_files}")
+
+                # Iniciar pool de procesos
+                with Pool(processes=recodificador.max_workers) as pool:
+                    # Iniciar todos los procesos
+                    results = [pool.apply_async(recodificador.process_file, (file_path,)) 
+                             for file_path in files_to_process]
+                    
+                    # Monitorear progreso
+                    while any(not r.ready() for r in results):
+                        try:
+                            with open(recodificador.progress_file, 'r') as f:
+                                progress_dict = json.load(f)
+                            
+                            if progress_dict:
+                                total_progress = sum(progress_dict.values()) / total_files
+                                current_files = ', '.join([f for f, p in progress_dict.items() if p < 100])
+                                
+                                progress_data = {
+                                    'status': 'processing',
+                                    'progress': total_progress,
+                                    'current_files': current_files
+                                }
+                                yield f"data: {json.dumps(progress_data)}\n\n"
+                        except Exception as e:
+                            print(f"Error leyendo progreso: {e}")
+                        
+                        time.sleep(1)
+                    
+                    # Verificar resultados
+                    for r in results:
+                        r.get()  # Esto lanzará cualquier excepción que haya ocurrido
+
+                completion_data = {'status': 'completed'}
+                yield f"data: {json.dumps(completion_data)}\n\n"
+                
+            except Exception as e:
+                print(f"Error en generate: {str(e)}")
+                error_data = {'error': str(e)}
+                yield f"data: {json.dumps(error_data)}\n\n"
+            finally:
+                if os.path.exists(recodificador.progress_file):
+                    os.remove(recodificador.progress_file)
+
+        return Response(generate(), mimetype='text/event-stream')
         
     except Exception as e:
         print(f"Error en recodificar_endpoint: {str(e)}")
         return jsonify({'status': 'error', 'message': str(e)}), 500
 
+# Asegurarse de que todas las rutas estén registradas
+print("Rutas registradas en la aplicación:")
+for rule in app.url_map.iter_rules():
+    print(f"{rule.endpoint}: {rule.methods} - {rule}")
+
 # Iniciar la aplicación
 if __name__ == '__main__':
-    app.run(debug=True)
+    app.run(debug=True, threaded=True)

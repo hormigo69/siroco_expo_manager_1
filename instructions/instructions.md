@@ -211,4 +211,4 @@ Falta:
 - faltan tb algunos arreglos en el Front, como 
 [x] poner el logotipo
 [x] hacer que el botón de cargar imágenes solo se vea cuando el foco esté en el input
-[x] añadir un botón que nos abra el Finder en la carpeta con los archivos procesados. 
+[ ] añadir un botón que nos abra el Finder en la carpeta con los archivos procesados. 

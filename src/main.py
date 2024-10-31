@@ -13,7 +13,10 @@ import platform
 import sys
 from openpyxl import load_workbook
 from openpyxl.worksheet.table import Table, TableStyleInfo
+from flask import Flask
+from multiprocessing import Manager
 
+app = Flask(__name__)
 
 #activar el entorno virtual
 #source venv/bin/activate   
@@ -371,9 +374,190 @@ class Recodificador:
         self.full_output_path = os.path.join(os.getcwd(), 'expos', self.expo_id)
         self.carpeta_origen = os.path.join(self.full_output_path, 'ficheros_salida')
         self.carpeta_destino = os.path.join(self.full_output_path, 'procesados')
-        self.excel_path = os.path.join(self.full_output_path, 'Resumen obras.xlsx')
-        # Optimización para Mac: usar cores efectivos
         self.max_workers = max(1, min(os.cpu_count() - 1, 4))
+        
+        # Crear un archivo de progreso con lock
+        self.progress_file = os.path.join(self.full_output_path, 'progress.json')
+        if os.path.exists(self.progress_file):
+            os.remove(self.progress_file)
+        with open(self.progress_file, 'w') as f:
+            json.dump({}, f)
+
+    def process_file(self, file_path):
+        try:
+            file_name = os.path.basename(file_path)
+            print(f"Iniciando procesamiento de {file_name}")
+            
+            if file_name.lower().endswith('.mp4'):
+                print(f"Procesando video: {file_name}")
+                archivo_salida = os.path.join(self.carpeta_destino, file_name)
+                
+                cmd = [
+                    'ffmpeg',
+                    '-i', file_path,
+                    '-vf', 'fps=30,scale=1920:1080:flags=bicubic',
+                    '-c:v', 'libx265',
+                    '-preset', 'medium',
+                    '-crf', '23',
+                    '-c:a', 'aac',
+                    '-b:v', '45M',
+                    '-maxrate', '60M',
+                    '-bufsize', '60M',
+                    '-movflags', '+faststart',
+                    '-progress', '-',  # Enviar progreso a stdout
+                    '-y',
+                    archivo_salida
+                ]
+                
+                print(f"Ejecutando comando: {' '.join(cmd)}")
+                process = subprocess.Popen(
+                    cmd,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    universal_newlines=True,
+                    bufsize=1  # Line buffered
+                )
+                
+                start_time = time.time()
+                last_progress_update = 0
+                
+                while True:
+                    # Leer la salida de ffmpeg
+                    output = process.stdout.readline()
+                    if output == '' and process.poll() is not None:
+                        break
+                    
+                    # Imprimir la salida para debug
+                    if output:
+                        print(f"[{file_name}] {output.strip()}")
+                        
+                        # Calcular progreso basado en el tiempo transcurrido
+                        current_time = time.time()
+                        elapsed_time = current_time - start_time
+                        
+                        # Actualizar progreso cada segundo
+                        if elapsed_time - last_progress_update >= 1:
+                            progress = min(95, (elapsed_time / 300) * 100)  # 300 segundos estimados
+                            self.save_progress(file_name, progress)
+                            last_progress_update = elapsed_time
+                            print(f"Progreso de {file_name}: {progress:.2f}%")
+                    
+                    # Leer también stderr para evitar bloqueos
+                    error = process.stderr.readline()
+                    if error:
+                        print(f"[{file_name}] Error: {error.strip()}")
+                
+                # Obtener el código de retorno
+                return_code = process.poll()
+                
+                if return_code == 0:
+                    print(f"Video {file_name} procesado exitosamente")
+                    self.save_progress(file_name, 100)
+                    return True
+                else:
+                    print(f"Error procesando video {file_name}. Código de retorno: {return_code}")
+                    error_output = process.stderr.read()
+                    print(f"Error detallado: {error_output}")
+                    self.save_progress(file_name, 0)
+                    return False
+                    
+            else:
+                print(f"Procesando imagen: {file_name}")
+                self.procesar_imagen(file_path)
+                self.save_progress(file_name, 100)
+                return True
+                
+        except Exception as e:
+            print(f"Error procesando {file_path}: {str(e)}")
+            self.save_progress(file_name, 0)
+            return False
+
+    def save_progress(self, filename, progress):
+        """Guarda el progreso de forma segura"""
+        max_retries = 3
+        for _ in range(max_retries):
+            try:
+                with open(self.progress_file, 'r') as f:
+                    progress_dict = json.load(f)
+                progress_dict[filename] = progress
+                with open(self.progress_file, 'w') as f:
+                    json.dump(progress_dict, f)
+                return True
+            except Exception as e:
+                print(f"Error guardando progreso: {e}")
+                time.sleep(0.1)
+        return False
+
+    def procesar_video(self, file_path):
+        try:
+            nombre_archivo = os.path.basename(file_path)
+            archivo_salida = os.path.join(self.carpeta_destino, nombre_archivo)
+            print(f"Procesando video {nombre_archivo} -> {archivo_salida}")
+            
+            # Primero obtener la duración del video
+            probe_cmd = [
+                'ffprobe', 
+                '-v', 'error',
+                '-show_entries', 'format=duration',
+                '-of', 'default=noprint_wrappers=1:nokey=1',
+                file_path
+            ]
+            
+            duration = float(subprocess.check_output(probe_cmd).decode().strip())
+            print(f"Duración del video: {duration} segundos")
+            
+            # Configurar el comando ffmpeg
+            cmd = [
+                'ffmpeg',
+                '-i', file_path,
+                '-vf', 'fps=30,scale=1920:1080:flags=bicubic',
+                '-c:v', 'libx265',
+                '-preset', 'medium',
+                '-crf', '23',
+                '-c:a', 'aac',
+                '-b:v', '45M',
+                '-maxrate', '60M',
+                '-bufsize', '60M',
+                '-movflags', '+faststart',
+                '-progress', 'pipe:1',  # Enviar progreso a stdout
+                '-y',
+                archivo_salida
+            ]
+
+            print(f"Ejecutando comando: {' '.join(cmd)}")
+            process = subprocess.Popen(
+                cmd,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                universal_newlines=True
+            )
+            
+            # Leer la salida línea por línea para monitorear el progreso
+            while True:
+                line = process.stdout.readline()
+                if not line:
+                    break
+                
+                # Buscar la línea que contiene el tiempo actual
+                if 'out_time_ms=' in line:
+                    current_time = float(line.split('=')[1]) / 1000000  # Convertir microsegundos a segundos
+                    progress = min(100, (current_time / duration) * 100)
+                    print(f"Progreso de {nombre_archivo}: {progress:.2f}%")
+            
+            # Esperar a que termine el proceso
+            process.wait()
+            
+            if process.returncode != 0:
+                stderr = process.stderr.read()
+                print(f"Error en ffmpeg: {stderr}")
+                raise subprocess.CalledProcessError(process.returncode, cmd, stderr)
+            
+            print(f"Video procesado exitosamente: {nombre_archivo}")
+            return True
+            
+        except Exception as e:
+            print(f"Error procesando video {file_path}: {str(e)}")
+            raise
 
     def crear_carpeta_procesados(self):
         if not os.path.exists(self.carpeta_destino):
@@ -474,107 +658,6 @@ class Recodificador:
                 print(f"Error al procesar la imagen {nombre_archivo}: {str(e)}")
                 return nombre_archivo
             
-    def procesar_video(self, ruta_archivo):
-        try:
-            nombre_archivo = os.path.basename(ruta_archivo)
-            with tqdm(total=100, desc=f"Procesando video: {nombre_archivo}", leave=False) as pbar:
-                # Verificar si es Mac con Apple Silicon
-                is_apple_silicon = platform.processor() == 'arm'
-                
-                probe = subprocess.run(['ffprobe', '-v', 'quiet', '-print_format', 'json', 
-                                     '-show_format', '-show_streams', ruta_archivo], 
-                                     stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
-                info = json.loads(probe.stdout)
-                
-                video_stream = next((stream for stream in info['streams'] if stream['codec_type'] == 'video'), None)
-                
-                if video_stream:
-                    width = int(video_stream.get('width', 0))
-                    height = int(video_stream.get('height', 0))
-                    fps = eval(video_stream.get('r_frame_rate', '0/1'))
-                    codec = video_stream.get('codec_name', '')
-                    
-                    necesita_procesamiento = False
-                    if (width, height) not in [(2160, 3840), (3840, 2160)] or fps > 30 or codec not in ['hevc', 'h264']:
-                        necesita_procesamiento = True
-                    
-                    bitrate = info['format'].get('bit_rate', 'N/A')
-                    if bitrate != 'N/A':
-                        bitrate = int(bitrate)
-                        if bitrate < 30_000_000 or bitrate > 60_000_000:
-                            necesita_procesamiento = True
-                    else:
-                        necesita_procesamiento = True
-                    
-                    if necesita_procesamiento:
-                        nuevo_nombre = os.path.splitext(nombre_archivo)[0] + '_procesado.mp4'
-                        ruta_destino = os.path.join(self.carpeta_destino, nuevo_nombre)
-                        
-                        new_size = '3840:2160' if width > height else '2160:3840'
-                        
-                        # Configuración base de FFmpeg
-                        cmd = [
-                            'ffmpeg', '-i', ruta_archivo,
-                            '-vf', f'fps=30,scale={new_size}:flags=bicubic',
-                            '-c:a', 'aac',
-                            '-b:v', '45M',
-                            '-maxrate', '60M',
-                            '-bufsize', '60M',
-                            '-movflags', '+faststart',
-                            '-progress', 'pipe:1'
-                        ]
-
-                        # Configuración específica para Mac
-                        if is_apple_silicon:
-                            # Usar el codificador de hardware de Apple Silicon
-                            cmd.extend([
-                                '-c:v', 'hevc_videotoolbox',
-                                '-allow_sw', '1',
-                                '-q:v', '50',  # Calidad para VideoToolbox (0-100, mayor es mejor)
-                                '-tag:v', 'hvc1'
-                            ])
-                        else:
-                            # Para Mac Intel usar libx265 optimizado
-                            cmd.extend([
-                                '-c:v', 'libx265',
-                                '-preset', 'medium',
-                                '-crf', '23',
-                                '-x265-params', f'pools=*:frame-threads={self.max_workers}',
-                                '-tag:v', 'hvc1'
-                            ])
-
-                        cmd.append(ruta_destino)
-                        
-                        process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, 
-                                                 universal_newlines=True)
-                        
-                        duration = float(info['format'].get('duration', 0))
-                        for line in process.stdout:
-                            if 'out_time_ms' in line:
-                                try:
-                                    time = int(line.split('=')[1]) / 1000000
-                                    if duration > 0:
-                                        progress = min(int((time / duration) * 100), 100)
-                                        pbar.update(progress - pbar.n)
-                                except ValueError:
-                                    pbar.update(1)
-                        
-                        process.wait()
-                        if process.returncode != 0:
-                            raise subprocess.CalledProcessError(process.returncode, cmd)
-                        
-                        pbar.update(100 - pbar.n)
-                    else:
-                        shutil.copy2(ruta_archivo, os.path.join(self.carpeta_destino, nombre_archivo))
-                        pbar.update(100)
-
-                return nombre_archivo
-
-        except subprocess.CalledProcessError as e:
-            print(f"Error al procesar el video {nombre_archivo}: {str(e)}")
-        except Exception as e:
-            print(f"Error inesperado al procesar el video {nombre_archivo}: {str(e)}")
-
     def actualizar_excel(self):
         try:
             # Leer el Excel existente
@@ -692,6 +775,7 @@ def main():
     recodificador.actualizar_excel()
 
 if __name__ == "__main__":
-    app.run(debug=True, port=5000)
+
     # El resto del código main() se ejecutará si se llama directamente
     main()
+    app.run(debug=True, port=5000)
